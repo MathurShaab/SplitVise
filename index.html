@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SplitTrack — Jatin & Nikhil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="light">
+
+  <!-- LOADER -->
+  <div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <p>Syncing...</p>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast"></div>
+
+  <!-- REGISTRATION -->
+  <div id="registration-screen" class="screen hidden">
+    <div class="reg-card">
+      <div class="reg-logo">✦</div>
+      <h1>SplitTrack</h1>
+      <p class="reg-sub">Select your name to continue</p>
+      <div class="reg-choices">
+        <button class="reg-btn" data-name="Jatin">
+          <span class="reg-avatar reg-avatar--j">J</span>
+          <span>Jatin</span>
+        </button>
+        <button class="reg-btn" data-name="Nikhil">
+          <span class="reg-avatar reg-avatar--n">N</span>
+          <span>Nikhil</span>
+        </button>
+      </div>
+      <p class="reg-note">Your device will remember your choice</p>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="hidden">
+
+    <!-- HEADER -->
+    <header>
+      <div class="header-left">
+        <span class="logo-mark">✦</span>
+        <span class="app-title">SplitTrack</span>
+      </div>
+      <div class="header-right">
+        <span id="user-badge"></span>
+        <button id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+        <button id="settings-btn" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <!-- SETTINGS PANEL -->
+    <div id="settings-panel" class="panel hidden" role="dialog" aria-label="Settings">
+      <div class="panel-content">
+        <h3>Settings</h3>
+        <p>Logged in as: <strong id="settings-user"></strong></p>
+        <hr />
+        <p class="warning-text">⚠ This will clear your identity from this device.</p>
+        <button id="reset-identity" class="btn-danger">Reset Identity</button>
+        <button id="close-settings" class="btn-ghost">Close</button>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <main>
+
+      <!-- SUMMARY CARDS -->
+      <section class="dashboard">
+        <div class="cards-grid">
+          <div class="card card-accent" style="--delay:0.05s">
+            <div class="card-label">Jatin Paid</div>
+            <div class="card-value" id="jatin-total">₹0</div>
+          </div>
+          <div class="card card-accent2" style="--delay:0.1s">
+            <div class="card-label">Nikhil Paid</div>
+            <div class="card-value" id="nikhil-total">₹0</div>
+          </div>
+          <div class="card card-main" style="--delay:0.15s">
+            <div class="card-label">Total Trip</div>
+            <div class="card-value" id="trip-total">₹0</div>
+          </div>
+          <div class="card" style="--delay:0.2s">
+            <div class="card-label">Equal Share</div>
+            <div class="card-value" id="equal-share">₹0</div>
+          </div>
+        </div>
+
+        <div id="settlement-box" class="settlement-box">
+          <div class="settlement-icon" id="settlement-icon">⚖</div>
+          <div id="settlement-msg" class="settlement-msg">All settled up!</div>
+        </div>
+      </section>
+
+      <!-- EXPENSE LIST -->
+      <section class="expenses-section">
+        <div class="section-header">
+          <h2>Expenses</h2>
+          <button id="refresh-btn" class="btn-ghost-sm">↻ Refresh</button>
+        </div>
+
+        <!-- MOBILE CARDS VIEW -->
+        <div id="expense-cards" class="expense-cards"></div>
+
+        <!-- DESKTOP TABLE VIEW -->
+        <div class="table-wrap">
+          <table id="expense-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Paid By</th>
+                <th>Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expense-body">
+              <tr>
+                <td colspan="5" class="empty-state">No expenses yet. Add one!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="app-footer">
+        <p>Developed by <strong>Jatin Mathur</strong></p>
+        <p class="footer-sub">SplitTrack &nbsp;✦&nbsp; Expense sharing made simple</p>
+      </footer>
+
+    </main>
+
+    <!-- FAB -->
+    <button id="fab" title="Add Expense" aria-label="Add Expense">
+      <span class="fab-icon">+</span>
+    </button>
+
+  </div>
+
+  <!-- ADD / EDIT MODAL -->
+  <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Add expense">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <h3 id="modal-title">Add Expense</h3>
+        <button id="modal-close" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <form id="expense-form" autocomplete="off">
+        <input type="hidden" id="edit-id" />
+        <div class="form-group">
+          <label for="f-amount">Amount (₹)</label>
+          <div class="input-wrap">
+            <span class="input-prefix">₹</span>
+            <input type="number" id="f-amount" placeholder="0.00" min="0.01" step="0.01" required inputmode="decimal" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="f-desc">Description</label>
+          <input type="text" id="f-desc" placeholder="What was this for?" required />
+        </div>
+        <div class="form-group">
+          <label for="f-date">Date</label>
+          <input type="date" id="f-date" required />
+        </div>
+        <div class="paid-by-info">
+          <span class="paid-by-dot"></span>
+          Paid by: <strong id="paid-by-label"></strong>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="cancel-btn" class="btn-ghost">Cancel</button>
+          <button type="submit" class="btn-primary" id="submit-btn">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SETUP GUIDE -->
+  <div id="setup-guide" class="setup-guide hidden">
+    <div class="setup-card">
+      <h2>⚙ Setup Required</h2>
+      <p>Open <code>js/script.js</code> and fill in your <code>APPS_SCRIPT_URL</code>.</p>
+      <button id="skip-setup" class="btn-primary">I've configured it — Continue</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
