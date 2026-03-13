@@ -114,6 +114,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function init() {
+
+  // warm up Apps Script
+  if (IS_CONFIGURED) {
+    fetch(CONFIG.APPS_SCRIPT_URL + "?action=read").catch(()=>{});
+  }
+
   currentUser ? showApp() : showRegistration();
 }
 
@@ -257,15 +263,26 @@ async function handleFormSubmit(e) {
       updatedAt: now,
     });
   } else {
-    await callSheet('add', {
-      expenseId:   generateId(),
-      amount,
-      description,
-      date,
-      paidBy:    currentUser,
-      createdAt: now,
-      updatedAt: now,
-    });
+     {
+
+  const newExpense = {
+    expenseId: generateId(),
+    amount,
+    description,
+    date,
+    paidBy: currentUser,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  // Update UI immediately
+  expenses.push(newExpense);
+  renderExpenses();
+  renderDashboard();
+
+  // Send to Google Sheet
+  await callSheet('add', newExpense);
+}
   }
 }
 
@@ -354,13 +371,15 @@ async function loadExpenses() {
         throw new Error('Expected array, got: ' + text.slice(0, 200));
       }
 
-      expenses = parsed.map(row => {
-        const clean = {};
-        for (const k in row) {
-          clean[k.trim()] = typeof row[k] === 'string' ? row[k].trim() : row[k];
-        }
-        return clean;
-      });
+      expenses = parsed
+  .map(row => {
+    const clean = {};
+    for (const k in row) {
+      clean[k.trim()] = typeof row[k] === 'string' ? row[k].trim() : row[k];
+    }
+    return clean;
+  })
+  .sort((a,b)=> new Date(b.date) - new Date(a.date));
     }
 
     renderExpenses();
@@ -463,9 +482,12 @@ function renderExpenses() {
     return;
   }
 
-  const sorted = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  sorted.forEach((exp, idx) => {
+//   const sorted = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+ // ✅ FIX: sort newest first
+ expenses.sort((a, b) => {
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+});
+  expenses.forEach((exp, idx) => {
     const paidLower = (exp.paidBy || '').trim().toLowerCase();
     const paidClass = paidLower === 'jatin' ? 'jatin' : 'nikhil';
 
@@ -569,8 +591,17 @@ function renderDashboard() {
 // ====================================================================
 //  HELPERS
 // ====================================================================
-function showLoader() { $('loader').classList.remove('hidden'); }
-function hideLoader() { $('loader').classList.add('hidden'); }
+let loaderTimeout;
+
+function showLoader() {
+  loaderTimeout = setTimeout(() => {
+    $('loader').classList.remove('hidden');
+  }, 300);
+}
+function hideLoader() {
+  clearTimeout(loaderTimeout);
+  $('loader').classList.add('hidden');
+}
 
 let toastTimer;
 function showToast(msg, type = '') {
