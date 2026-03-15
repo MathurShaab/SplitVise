@@ -21,30 +21,60 @@
 </head>
 <body class="light">
 
-  <!-- LOADER -->
   <div id="loader" class="loader hidden"><div class="spinner"></div><p>Syncing...</p></div>
-
-  <!-- TOAST -->
   <div id="toast" class="toast"></div>
 
   <!-- ══════════════════════════════════════════════════════
-       SCREEN 1 — REGISTRATION
+       SCREEN — AUTH (Register / Login)
   ══════════════════════════════════════════════════════ -->
-  <div id="screen-register" class="screen hidden">
-    <div class="reg-card">
+  <div id="screen-auth" class="screen hidden">
+    <div class="auth-card">
       <div class="reg-logo">✦</div>
       <h1>SplitTrack</h1>
-      <p class="reg-sub">Enter your name to get started</p>
-      <div class="form-group">
-        <input type="text" id="reg-name" placeholder="Your name" maxlength="30" autocomplete="off" />
+      <p class="reg-sub">Split expenses with friends</p>
+
+      <!-- Tab switcher -->
+      <div class="auth-tabs">
+        <button id="show-login"    class="auth-tab auth-tab-active">Login</button>
+        <button id="show-register" class="auth-tab">Register</button>
       </div>
-      <button id="reg-continue" class="btn-primary btn-full">Continue →</button>
-      <p class="reg-note">Your device will remember you</p>
+
+      <!-- Login panel -->
+      <div id="auth-login-panel">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="auth-login-name" placeholder="Your username" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="auth-login-pass" placeholder="Your password" autocomplete="current-password" />
+        </div>
+        <button id="btn-login" class="btn-primary btn-full">Login →</button>
+      </div>
+
+      <!-- Register panel -->
+      <div id="auth-register-panel" class="hidden">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="auth-reg-name" placeholder="Choose a username" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="auth-reg-pass" placeholder="Choose a password" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label>UPI ID <span style="color:var(--text3);font-weight:400">(optional — for receiving payments)</span></label>
+          <input type="text" id="auth-reg-upi" placeholder="e.g. name@upi or 9999999999@upi" />
+        </div>
+        <button id="btn-register" class="btn-primary btn-full">Create Account →</button>
+      </div>
+
+      <p class="reg-note" style="margin-top:16px">Your account is saved to the shared sheet</p>
     </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════════
-       SCREEN 2 — GROUP HUB
+       SCREEN — GROUP HUB
   ══════════════════════════════════════════════════════ -->
   <div id="screen-groups" class="screen hidden">
     <div class="groups-wrap">
@@ -61,13 +91,13 @@
           <h3>Account</h3>
           <p>Logged in as: <strong id="hub-settings-name"></strong></p>
           <div class="form-group" style="margin-top:12px">
-            <label>Your UPI ID (for settlements)</label>
+            <label>Your UPI ID</label>
             <input type="text" id="hub-upi" placeholder="name@upi" autocomplete="off" />
           </div>
           <button id="hub-save-upi" class="btn-primary btn-full">Save UPI ID</button>
           <hr />
-          <p class="warning-text">⚠ Clears all local data</p>
-          <button id="hub-reset" class="btn-danger">Reset Identity</button>
+          <p class="warning-text">⚠ Clears local data</p>
+          <button id="hub-reset" class="btn-danger">Logout</button>
           <button id="hub-settings-close" class="btn-ghost" style="margin-top:6px;width:100%">Close</button>
         </div>
       </div>
@@ -79,20 +109,19 @@
         </div>
         <div class="groups-actions">
           <button id="btn-create-group" class="btn-primary">+ Create Group</button>
-          <button id="btn-join-group" class="btn-ghost">Join with Code</button>
+          <button id="btn-join-group"   class="btn-ghost">Join with Code</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════════
-       SCREEN 3 — MAIN APP
+       SCREEN — MAIN APP
   ══════════════════════════════════════════════════════ -->
   <div id="app" class="hidden">
-
     <header>
       <div class="header-left">
-        <button id="back-btn" class="icon-btn" title="Back to groups">←</button>
+        <button id="back-btn" class="icon-btn">←</button>
         <div>
           <span class="app-title" id="group-name-header"></span>
           <span class="group-members-count" id="group-members-count"></span>
@@ -100,8 +129,8 @@
       </div>
       <div class="header-right">
         <span id="user-badge"></span>
-        <button id="dark-toggle" class="icon-btn" title="Toggle dark mode">◐</button>
-        <button id="app-settings-btn" class="icon-btn" title="Group settings">⚙</button>
+        <button id="dark-toggle" class="icon-btn">◐</button>
+        <button id="app-settings-btn" class="icon-btn">⚙</button>
       </div>
     </header>
 
@@ -147,9 +176,7 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Date</th><th>Description</th><th>Paid By</th><th>Split</th><th>Amount</th><th>Actions</th>
-              </tr>
+              <tr><th>Date</th><th>Description</th><th>Paid By</th><th>Split</th><th>Amount</th><th>Actions</th></tr>
             </thead>
             <tbody id="expense-body"></tbody>
           </table>
@@ -162,12 +189,10 @@
       </footer>
     </main>
 
-    <button id="fab" title="Add Expense" aria-label="Add Expense"><span class="fab-icon">+</span></button>
+    <button id="fab" aria-label="Add Expense"><span class="fab-icon">+</span></button>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
-       MODAL — ADD / EDIT EXPENSE
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ MODAL — ADD / EDIT EXPENSE ══ -->
   <div id="modal-overlay" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-handle"></div>
@@ -208,10 +233,7 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
-       MODAL — CREATE GROUP
-       NOTE: NO inline onclick here — handled in JS
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ MODAL — CREATE GROUP ══ -->
   <div id="modal-create-group" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-handle"></div>
@@ -230,10 +252,7 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
-       MODAL — JOIN GROUP
-       NOTE: NO inline onclick here — handled in JS
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ MODAL — JOIN GROUP ══ -->
   <div id="modal-join-group" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-handle"></div>
@@ -244,8 +263,7 @@
       <p style="font-size:14px;color:var(--text2);margin-bottom:16px">Enter the invite code shared by your friend</p>
       <div class="form-group">
         <label>Invite Code</label>
-        <input type="text" id="join-code-input" placeholder="e.g. GOA2025" maxlength="20" autocomplete="off"
-               style="text-transform:uppercase;letter-spacing:0.1em" />
+        <input type="text" id="join-code-input" placeholder="e.g. GOA2025" maxlength="20" autocomplete="off" style="text-transform:uppercase;letter-spacing:0.1em" />
       </div>
       <div class="form-actions">
         <button id="join-group-cancel" class="btn-ghost">Cancel</button>
@@ -254,29 +272,27 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════
-       MODAL — SETTLE UP
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ MODAL — SETTLE UP ══ -->
   <div id="modal-settle" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <h3>Settle Up 💸</h3>
+        <h3>Pay Up 💸</h3>
         <button id="settle-close" class="modal-close">✕</button>
       </div>
       <div id="settle-summary" class="settle-summary"></div>
       <div class="form-group" id="upi-entry-group">
         <label id="upi-label">Payee's UPI ID</label>
-        <input type="text" id="settle-upi" placeholder="name@upi or phone@upi" autocomplete="off" />
-        <p class="field-hint">This will open your UPI payment app</p>
+        <input type="text" id="settle-upi" placeholder="name@upi or 9999999999@upi" autocomplete="off" />
+        <p class="field-hint" id="settle-upi-hint">This will open your UPI payment app</p>
       </div>
       <div class="form-actions">
         <button id="settle-cancel" class="btn-ghost">Cancel</button>
         <button id="confirm-settle-pay" class="btn-primary">Open Payment App →</button>
       </div>
       <div class="settle-after" id="settle-after" style="display:none">
-        <p>After completing payment, mark this group as settled:</p>
-        <button class="btn-danger btn-full" id="confirm-settle-clear" style="margin-top:10px">✓ Mark as Settled & Clear Expenses</button>
+        <p>After completing payment in your UPI app, tap below to record it:</p>
+        <button class="btn-primary btn-full" id="confirm-settle-clear" style="margin-top:12px">✓ I've Paid — Mark as Settled</button>
       </div>
     </div>
   </div>
