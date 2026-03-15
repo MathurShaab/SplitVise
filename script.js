@@ -351,6 +351,12 @@ function bindAllEvents() {
   $('settle-cancel').addEventListener('click', () => $('modal-settle').classList.add('hidden'));
   $('modal-settle').addEventListener('click',  e => { if (e.target === $('modal-settle')) $('modal-settle').classList.add('hidden'); });
   $('confirm-settle-pay').addEventListener('click', doSettlePay);
+
+  // UPI app direct launch buttons
+  $('btn-gpay').addEventListener('click',    () => launchUpiApp('gpay'));
+  $('btn-phonepe').addEventListener('click', () => launchUpiApp('phonepe'));
+  $('btn-paytm').addEventListener('click',   () => launchUpiApp('paytm'));
+  $('btn-upi-any').addEventListener('click', () => launchUpiApp('any'));
   $('confirm-settle-clear').addEventListener('click', doSettleClear);
 }
 
@@ -905,6 +911,7 @@ async function openSettleModal(s) {
   $('settle-upi-hint').textContent = 'Looking up UPI...';
 
   $('upi-entry-group').style.display    = 'block';
+  $('upi-app-buttons').style.display    = 'block';
   $('confirm-settle-pay').style.display = '';
   $('settle-after').style.display       = 'none';
   $('modal-settle').classList.remove('hidden');
@@ -926,22 +933,66 @@ async function openSettleModal(s) {
 }
 
 function doSettlePay() {
+  // Delegates to launchUpiApp with generic 'any' which shows Android app chooser
+  launchUpiApp('any');
+}
+
+// Launch specific UPI app with pre-filled payment details
+function launchUpiApp(app) {
   if (!pendingSettlement) return;
   const upiId = $('settle-upi').value.trim();
-  if (!upiId) { showToast('Enter UPI ID to pay', 'error'); return; }
+  if (!upiId) { showToast('Enter UPI ID first', 'error'); return; }
 
   const amount = pendingSettlement.amount.toFixed(2);
-  const note   = encodeURIComponent('SplitTrack: ' + pendingSettlement.from + ' → ' + pendingSettlement.to);
+  const note   = 'SplitTrack: ' + pendingSettlement.from + ' to ' + pendingSettlement.to;
+  const pn     = encodeURIComponent(pendingSettlement.to);
+  const pa     = encodeURIComponent(upiId);
+  const tn     = encodeURIComponent(note);
 
-  // Open UPI deep link — works in Android WebView apps
-  window.location.href = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(pendingSettlement.to)}&am=${amount}&cu=INR&tn=${note}`;
+  const params = `pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`;
 
-  // After redirect attempt, show "mark as settled" option
+  // Android native deep links (work in WebIntoApp / Android WebView)
+  const deepLinks = {
+    gpay:    `tez://upi/pay?${params}`,
+    phonepe: `phonepe://pay?${params}`,
+    paytm:   `paytmmp://pay?${params}`,
+    any:     `upi://pay?${params}`,
+  };
+
+  // Web fallback URLs (work in browser on desktop/iOS)
+  const webLinks = {
+    gpay:    `https://pay.google.com/gp/v/send?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
+    phonepe: `https://phon.pe/r/transfer?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
+    paytm:   `https://paytm.com/biz/payment/request?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
+    any:     `upi://pay?${params}`,
+  };
+
+  const deepUrl = deepLinks[app] || deepLinks.any;
+  const webUrl  = webLinks[app]  || webLinks.any;
+
+  // Try native deep link first via anchor click
+  const a = document.createElement('a');
+  a.href = deepUrl;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // After 1.5s, if still here, open web fallback in new tab
+  setTimeout(() => {
+    // Check if document is still visible (deep link didn't navigate away)
+    if (!document.hidden) {
+      window.open(webUrl, '_blank');
+    }
+  }, 1500);
+
+  // Show "mark as settled" after 3s
   setTimeout(() => {
     $('upi-entry-group').style.display    = 'none';
+    $('upi-app-buttons').style.display    = 'none';
     $('confirm-settle-pay').style.display = 'none';
     $('settle-after').style.display       = 'block';
-  }, 1200);
+  }, 3000);
 }
 
 // Record ONLY this pair's settlement — other pairs NOT affected
