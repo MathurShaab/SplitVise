@@ -910,10 +910,12 @@ async function openSettleModal(s) {
   $('settle-upi').value      = '';
   $('settle-upi-hint').textContent = 'Looking up UPI...';
 
-  $('upi-entry-group').style.display    = 'block';
-  $('upi-app-buttons').style.display    = 'block';
-  $('confirm-settle-pay').style.display = '';
-  $('settle-after').style.display       = 'none';
+  $('upi-entry-group').style.display       = 'block';
+  $('upi-app-buttons').style.display       = 'block';
+  $('upi-pay-link-container').style.display = 'none';
+  $('upi-pay-link-container').innerHTML     = '';
+  $('confirm-settle-pay').style.display    = '';
+  $('settle-after').style.display          = 'none';
   $('modal-settle').classList.remove('hidden');
 
   // Auto-lookup the payee's UPI ID from Users sheet
@@ -945,54 +947,66 @@ function launchUpiApp(app) {
 
   const amount = pendingSettlement.amount.toFixed(2);
   const note   = 'SplitTrack: ' + pendingSettlement.from + ' to ' + pendingSettlement.to;
-  const pn     = encodeURIComponent(pendingSettlement.to);
   const pa     = encodeURIComponent(upiId);
+  const pn     = encodeURIComponent(pendingSettlement.to);
   const tn     = encodeURIComponent(note);
-
   const params = `pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`;
 
-  // Android native deep links (work in WebIntoApp / Android WebView)
-  const deepLinks = {
+  // On Android (WebIntoApp), use deep links. On browser, use web URLs.
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  const androidUrls = {
     gpay:    `tez://upi/pay?${params}`,
     phonepe: `phonepe://pay?${params}`,
     paytm:   `paytmmp://pay?${params}`,
     any:     `upi://pay?${params}`,
   };
 
-  // Web fallback URLs (work in browser on desktop/iOS)
-  const webLinks = {
+  // Web URLs that work in any browser without app install
+  const webUrls = {
+    gpay:    `https://gpay.app.goo.gl/pay?pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`,
+    phonepe: `https://phon.pe/r/transfer?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
+    paytm:   `https://paytm.com/biz/payment/request?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
+    any:     `https://gpay.app.goo.gl/pay?pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`,
+  };
+
+  const url = isAndroid ? (androidUrls[app] || androidUrls.any) : (webUrls[app] || webUrls.any);
+  console.log('[launchUpiApp] isAndroid:', isAndroid, 'url:', url);
+
+  // Show a visible tap-to-pay link the user can click directly
+  // This avoids popup blocker issues and works in all WebViews
+  const container = $('upi-pay-link-container');
+  container.innerHTML = `
+    <p style="font-size:13px;color:var(--text2);margin-bottom:8px;text-align:center">Tap the button below to open payment:</p>
+    <a href="${url}"
+       style="display:block;width:100%;padding:14px;background:var(--accent);color:#fff;text-align:center;
+              border-radius:10px;font-family:var(--font-display);font-weight:700;font-size:15px;
+              text-decoration:none;letter-spacing:.02em;"
+       onclick="handleUpiLinkClick(event, '${url}', '${app}', '${amount}', '${pa}', '${pn}', '${tn}')">
+      💸 Pay ₹${amount} Now
+    </a>`;
+  container.style.display = 'block';
+
+  // Hide the app buttons, show the direct link
+  $('upi-app-buttons').style.display    = 'none';
+  $('confirm-settle-pay').style.display = 'none';
+}
+
+function handleUpiLinkClick(event, deepUrl, app, amount, pa, pn, tn) {
+  // Try deep link — if it fails (desktop), open web fallback
+  const webFallbacks = {
     gpay:    `https://pay.google.com/gp/v/send?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
     phonepe: `https://phon.pe/r/transfer?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
     paytm:   `https://paytm.com/biz/payment/request?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    any:     `upi://pay?${params}`,
+    any:     `https://pay.google.com/gp/v/send?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
   };
 
-  const deepUrl = deepLinks[app] || deepLinks.any;
-  const webUrl  = webLinks[app]  || webLinks.any;
-
-  // Try native deep link first via anchor click
-  const a = document.createElement('a');
-  a.href = deepUrl;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  // After 1.5s, if still here, open web fallback in new tab
+  // Show "mark as settled" after clicking
   setTimeout(() => {
-    // Check if document is still visible (deep link didn't navigate away)
-    if (!document.hidden) {
-      window.open(webUrl, '_blank');
-    }
-  }, 1500);
-
-  // Show "mark as settled" after 3s
-  setTimeout(() => {
-    $('upi-entry-group').style.display    = 'none';
-    $('upi-app-buttons').style.display    = 'none';
-    $('confirm-settle-pay').style.display = 'none';
-    $('settle-after').style.display       = 'block';
-  }, 3000);
+    $('upi-pay-link-container').style.display = 'none';
+    $('upi-entry-group').style.display        = 'none';
+    $('settle-after').style.display           = 'block';
+  }, 1000);
 }
 
 // Record ONLY this pair's settlement — other pairs NOT affected
