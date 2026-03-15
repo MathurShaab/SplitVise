@@ -288,3 +288,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
   #fab{bottom:calc(20px + env(safe-area-inset-bottom))}
   .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 }
+
+/* ── AUTH SCREEN ── */
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:28px;padding:40px 28px 32px;text-align:center;max-width:380px;width:100%;box-shadow:var(--shadow-lg);animation:cardPop .5s var(--ease) both}
+.auth-tabs{display:flex;gap:0;margin-bottom:24px;background:var(--surface2);border-radius:var(--radius-sm);padding:4px}
+.auth-tab{flex:1;padding:9px;border:none;background:transparent;border-radius:calc(var(--radius-sm) - 2px);cursor:pointer;font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--text2);transition:all var(--t)}
+.auth-tab-active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
