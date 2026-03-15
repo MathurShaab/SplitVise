@@ -1,11 +1,10 @@
 /**
  * SplitTrack — Production v3
  * ─────────────────────────────────────────────────────────────
- * APPS SCRIPT — replace everything, deploy NEW VERSION
+ * APPS SCRIPT — paste into Apps Script, deploy as NEW VERSION
  * ─────────────────────────────────────────────────────────────
  *
- * SHEET TABS NEEDED (create manually with these exact headers):
- *
+ * SHEET TABS & HEADERS:
  * Users:       userId | username | passwordHash | upiId | createdAt
  * Groups:      groupId | groupName | inviteCode | members | createdAt
  * Expenses:    expenseId | groupId | amount | description | date | paidBy | splitWith | createdAt | updatedAt
@@ -13,215 +12,103 @@
  * Archive:     expenseId | groupId | amount | description | date | paidBy | splitWith | createdAt | settledAt
  *
  * ─────────────────────────────────────────────────────────────
- *
- * const USERS_SHEET       = 'Users';
- * const GROUPS_SHEET      = 'Groups';
- * const EXPENSES_SHEET    = 'Expenses';
- * const SETTLEMENTS_SHEET = 'Settlements';
- * const ARCHIVE_SHEET     = 'Archive';
- *
- * function getSheet(name) {
- *   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
- * }
- *
- * function simpleHash(str) {
- *   let hash = 0;
- *   for (let i = 0; i < str.length; i++) {
- *     hash = ((hash << 5) - hash) + str.charCodeAt(i);
- *     hash |= 0;
+ * const USERS_SHEET='Users',GROUPS_SHEET='Groups',EXPENSES_SHEET='Expenses',SETTLEMENTS_SHEET='Settlements',ARCHIVE_SHEET='Archive';
+ * function getSheet(n){return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(n);}
+ * function simpleHash(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return String(Math.abs(h));}
+ * function respond(d){return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON);}
+ * function doGet(e){
+ *   const action=(e&&e.parameter&&e.parameter.action)?e.parameter.action:'ping';
+ *   const groupId=e&&e.parameter?e.parameter.groupId:null;
+ *   if(action==='ping')return respond({ok:true});
+ *   if(action==='register'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));
+ *     const sheet=getSheet(USERS_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][1]).trim().toLowerCase()===d.username.trim().toLowerCase())return respond({success:false,error:'Username already taken'});}
+ *     const userId='usr_'+Date.now();
+ *     sheet.appendRow([userId,d.username.trim(),simpleHash(d.password),d.upiId||'',new Date().toISOString()]);
+ *     return respond({success:true,userId,username:d.username.trim(),upiId:d.upiId||''});
  *   }
- *   return String(Math.abs(hash));
- * }
- *
- * function doGet(e) {
- *   const action  = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'ping';
- *   const groupId = e && e.parameter ? e.parameter.groupId : null;
- *
- *   if (action === 'ping') return respond({ ok: true });
- *
- *   // ── AUTH: register ──────────────────────────────────────
- *   if (action === 'register') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(USERS_SHEET);
- *     const rows  = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][1]).trim().toLowerCase() === d.username.trim().toLowerCase())
- *         return respond({ success: false, error: 'Username already taken' });
+ *   if(action==='login'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));
+ *     const sheet=getSheet(USERS_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){
+ *       if(String(rows[i][1]).trim().toLowerCase()===d.username.trim().toLowerCase()&&String(rows[i][2]).trim()===simpleHash(d.password))
+ *         return respond({success:true,userId:String(rows[i][0]).trim(),username:String(rows[i][1]).trim(),upiId:String(rows[i][3]).trim()});
  *     }
- *     const userId = 'usr_' + Date.now();
- *     sheet.appendRow([userId, d.username.trim(), simpleHash(d.password), d.upiId || '', new Date().toISOString()]);
- *     return respond({ success: true, userId, username: d.username.trim(), upiId: d.upiId || '' });
+ *     return respond({success:false,error:'Invalid username or password'});
  *   }
- *
- *   // ── AUTH: login ─────────────────────────────────────────
- *   if (action === 'login') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(USERS_SHEET);
- *     const rows  = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][1]).trim().toLowerCase() === d.username.trim().toLowerCase() &&
- *           String(rows[i][2]).trim() === simpleHash(d.password)) {
- *         return respond({ success: true, userId: String(rows[i][0]).trim(), username: String(rows[i][1]).trim(), upiId: String(rows[i][3]).trim() });
- *       }
- *     }
- *     return respond({ success: false, error: 'Invalid username or password' });
+ *   if(action==='updateUpi'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));
+ *     const sheet=getSheet(USERS_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][0]).trim()===d.userId){sheet.getRange(i+1,4).setValue(d.upiId);return respond({success:true});}}
+ *     return respond({success:false,error:'User not found'});
  *   }
- *
- *   // ── AUTH: updateUpi ─────────────────────────────────────
- *   if (action === 'updateUpi') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(USERS_SHEET);
- *     const rows  = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][0]).trim() === d.userId) {
- *         sheet.getRange(i+1, 4).setValue(d.upiId);
- *         return respond({ success: true });
- *       }
- *     }
- *     return respond({ success: false, error: 'User not found' });
+ *   if(action==='getUserUpi'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));
+ *     const sheet=getSheet(USERS_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][1]).trim().toLowerCase()===d.username.trim().toLowerCase())return respond({success:true,upiId:String(rows[i][3]).trim()});}
+ *     return respond({success:false,upiId:''});
  *   }
- *
- *   // ── GET USER UPI ────────────────────────────────────────
- *   if (action === 'getUserUpi') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(USERS_SHEET);
- *     const rows  = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][1]).trim().toLowerCase() === d.username.trim().toLowerCase())
- *         return respond({ success: true, upiId: String(rows[i][3]).trim() });
- *     }
- *     return respond({ success: false, upiId: '' });
- *   }
- *
- *   // ── READ EXPENSES ───────────────────────────────────────
- *   if (action === 'read') {
- *     const sheet = getSheet(EXPENSES_SHEET);
- *     const data  = sheet.getDataRange().getValues();
- *     if (data.length <= 1) return respond([]);
- *     const headers = data[0];
- *     const rows = data.slice(1)
- *       .filter(r => String(r[0]).trim() !== '' && (!groupId || String(r[1]).trim() === groupId))
- *       .map(row => { const obj = {}; headers.forEach((h,i) => { obj[String(h).trim()] = String(row[i]).trim(); }); return obj; });
+ *   if(action==='read'){
+ *     const sheet=getSheet(EXPENSES_SHEET);const data=sheet.getDataRange().getValues();
+ *     if(data.length<=1)return respond([]);
+ *     const headers=data[0];
+ *     const rows=data.slice(1).filter(r=>String(r[0]).trim()!==''&&(!groupId||String(r[1]).trim()===groupId))
+ *       .map(row=>{const obj={};headers.forEach((h,i)=>{obj[String(h).trim()]=String(row[i]).trim();});return obj;});
  *     return respond(rows);
  *   }
- *
- *   // ── READ GROUPS ─────────────────────────────────────────
- *   if (action === 'readGroups') {
- *     const sheet = getSheet(GROUPS_SHEET);
- *     const data  = sheet.getDataRange().getValues();
- *     if (data.length <= 1) return respond([]);
- *     const headers = data[0];
- *     const rows = data.slice(1)
- *       .filter(r => String(r[0]).trim() !== '')
- *       .map(row => { const obj = {}; headers.forEach((h,i) => { obj[String(h).trim()] = String(row[i]).trim(); }); return obj; });
+ *   if(action==='readGroups'){
+ *     const sheet=getSheet(GROUPS_SHEET);const data=sheet.getDataRange().getValues();
+ *     if(data.length<=1)return respond([]);
+ *     const headers=data[0];
+ *     const rows=data.slice(1).filter(r=>String(r[0]).trim()!=='')
+ *       .map(row=>{const obj={};headers.forEach((h,i)=>{obj[String(h).trim()]=String(row[i]).trim();});return obj;});
  *     return respond(rows);
  *   }
- *
- *   // ── READ SETTLEMENTS ────────────────────────────────────
- *   if (action === 'readSettlements') {
- *     const sheet = getSheet(SETTLEMENTS_SHEET);
- *     const data  = sheet.getDataRange().getValues();
- *     if (data.length <= 1) return respond([]);
- *     const headers = data[0];
- *     const rows = data.slice(1)
- *       .filter(r => String(r[0]).trim() !== '' && (!groupId || String(r[1]).trim() === groupId))
- *       .map(row => { const obj = {}; headers.forEach((h,i) => { obj[String(h).trim()] = String(row[i]).trim(); }); return obj; });
+ *   if(action==='readSettlements'){
+ *     const sheet=getSheet(SETTLEMENTS_SHEET);const data=sheet.getDataRange().getValues();
+ *     if(data.length<=1)return respond([]);
+ *     const headers=data[0];
+ *     const rows=data.slice(1).filter(r=>String(r[0]).trim()!==''&&(!groupId||String(r[1]).trim()===groupId))
+ *       .map(row=>{const obj={};headers.forEach((h,i)=>{obj[String(h).trim()]=String(row[i]).trim();});return obj;});
  *     return respond(rows);
  *   }
- *
- *   // ── ADD EXPENSE ─────────────────────────────────────────
- *   if (action === 'add') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     getSheet(EXPENSES_SHEET).appendRow([d.expenseId,d.groupId,d.amount,d.description,d.date,d.paidBy,d.splitWith,d.createdAt,d.updatedAt]);
- *     return respond({ success: true });
+ *   if(action==='add'){const d=JSON.parse(decodeURIComponent(e.parameter.data));getSheet(EXPENSES_SHEET).appendRow([d.expenseId,d.groupId,d.amount,d.description,d.date,d.paidBy,d.splitWith,d.createdAt,d.updatedAt]);return respond({success:true});}
+ *   if(action==='edit'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));const sheet=getSheet(EXPENSES_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][0]).trim()===String(d.expenseId).trim()){sheet.getRange(i+1,1,1,9).setValues([[d.expenseId,d.groupId,d.amount,d.description,d.date,d.paidBy,d.splitWith,rows[i][7],d.updatedAt]]);break;}}
+ *     return respond({success:true});
  *   }
- *
- *   // ── EDIT EXPENSE ────────────────────────────────────────
- *   if (action === 'edit') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(EXPENSES_SHEET);
- *     const rows = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][0]).trim() === String(d.expenseId).trim()) {
- *         sheet.getRange(i+1,1,1,9).setValues([[d.expenseId,d.groupId,d.amount,d.description,d.date,d.paidBy,d.splitWith,rows[i][7],d.updatedAt]]);
- *         break;
+ *   if(action==='delete'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));const sheet=getSheet(EXPENSES_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][0]).trim()===String(d.expenseId).trim()){sheet.deleteRow(i+1);break;}}
+ *     return respond({success:true});
+ *   }
+ *   if(action==='createGroup'){const d=JSON.parse(decodeURIComponent(e.parameter.data));getSheet(GROUPS_SHEET).appendRow([d.groupId,d.groupName,d.inviteCode,d.members,d.createdAt]);return respond({success:true});}
+ *   if(action==='joinGroup'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));const sheet=getSheet(GROUPS_SHEET);const rows=sheet.getDataRange().getValues();
+ *     for(let i=1;i<rows.length;i++){
+ *       if(String(rows[i][2]).trim().toUpperCase()===String(d.inviteCode).trim().toUpperCase()){
+ *         const existing=String(rows[i][3]).trim();const members=existing?existing.split(',').map(s=>s.trim()):[];
+ *         if(!members.includes(d.memberName)){members.push(d.memberName);sheet.getRange(i+1,4).setValue(members.join(','));}
+ *         return respond({success:true,groupId:String(rows[i][0]).trim(),groupName:String(rows[i][1]).trim(),members:members.join(',')});
  *       }
  *     }
- *     return respond({ success: true });
+ *     return respond({success:false,error:'Invalid invite code'});
  *   }
- *
- *   // ── DELETE EXPENSE ──────────────────────────────────────
- *   if (action === 'delete') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(EXPENSES_SHEET);
- *     const rows = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][0]).trim() === String(d.expenseId).trim()) { sheet.deleteRow(i+1); break; }
- *     }
- *     return respond({ success: true });
+ *   if(action==='recordSettlement'){const d=JSON.parse(decodeURIComponent(e.parameter.data));getSheet(SETTLEMENTS_SHEET).appendRow([d.settlementId,d.groupId,d.fromUser,d.toUser,d.amount,d.settledAt]);return respond({success:true});}
+ *   if(action==='settle'){
+ *     const d=JSON.parse(decodeURIComponent(e.parameter.data));
+ *     const expSheet=getSheet(EXPENSES_SHEET);const arcSheet=getSheet(ARCHIVE_SHEET);const settledAt=new Date().toISOString();
+ *     const rows=expSheet.getDataRange().getValues();const toDelete=[];
+ *     for(let i=1;i<rows.length;i++){if(String(rows[i][1]).trim()===String(d.groupId).trim()){arcSheet.appendRow([rows[i][0],rows[i][1],rows[i][2],rows[i][3],rows[i][4],rows[i][5],rows[i][6],rows[i][7],settledAt]);toDelete.push(i+1);}}
+ *     for(let i=toDelete.length-1;i>=0;i--)expSheet.deleteRow(toDelete[i]);
+ *     const sSheet=getSheet(SETTLEMENTS_SHEET);const sRows=sSheet.getDataRange().getValues();const sDel=[];
+ *     for(let i=1;i<sRows.length;i++){if(String(sRows[i][1]).trim()===String(d.groupId).trim())sDel.push(i+1);}
+ *     for(let i=sDel.length-1;i>=0;i--)sSheet.deleteRow(sDel[i]);
+ *     return respond({success:true});
  *   }
- *
- *   // ── CREATE GROUP ────────────────────────────────────────
- *   if (action === 'createGroup') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     getSheet(GROUPS_SHEET).appendRow([d.groupId,d.groupName,d.inviteCode,d.members,d.createdAt]);
- *     return respond({ success: true });
- *   }
- *
- *   // ── JOIN GROUP ──────────────────────────────────────────
- *   if (action === 'joinGroup') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const sheet = getSheet(GROUPS_SHEET);
- *     const rows = sheet.getDataRange().getValues();
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][2]).trim().toUpperCase() === String(d.inviteCode).trim().toUpperCase()) {
- *         const existing = String(rows[i][3]).trim();
- *         const members = existing ? existing.split(',').map(s=>s.trim()) : [];
- *         if (!members.includes(d.memberName)) { members.push(d.memberName); sheet.getRange(i+1,4).setValue(members.join(',')); }
- *         return respond({ success:true, groupId:String(rows[i][0]).trim(), groupName:String(rows[i][1]).trim(), members:members.join(',') });
- *       }
- *     }
- *     return respond({ success: false, error: 'Invalid invite code' });
- *   }
- *
- *   // ── RECORD SETTLEMENT (pair only) ───────────────────────
- *   if (action === 'recordSettlement') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     getSheet(SETTLEMENTS_SHEET).appendRow([d.settlementId, d.groupId, d.fromUser, d.toUser, d.amount, d.settledAt]);
- *     return respond({ success: true });
- *   }
- *
- *   // ── FULL SETTLE (archive + clear ALL group expenses) ────
- *   if (action === 'settle') {
- *     const d = JSON.parse(decodeURIComponent(e.parameter.data));
- *     const expSheet = getSheet(EXPENSES_SHEET);
- *     const arcSheet = getSheet(ARCHIVE_SHEET);
- *     const settledAt = new Date().toISOString();
- *     const rows = expSheet.getDataRange().getValues();
- *     const toDelete = [];
- *     for (let i = 1; i < rows.length; i++) {
- *       if (String(rows[i][1]).trim() === String(d.groupId).trim()) {
- *         arcSheet.appendRow([rows[i][0],rows[i][1],rows[i][2],rows[i][3],rows[i][4],rows[i][5],rows[i][6],rows[i][7],settledAt]);
- *         toDelete.push(i+1);
- *       }
- *     }
- *     for (let i = toDelete.length-1; i >= 0; i--) expSheet.deleteRow(toDelete[i]);
- *     // Also clear settlements for this group
- *     const sSheet = getSheet(SETTLEMENTS_SHEET);
- *     const sRows = sSheet.getDataRange().getValues();
- *     const sDel = [];
- *     for (let i = 1; i < sRows.length; i++) {
- *       if (String(sRows[i][1]).trim() === String(d.groupId).trim()) sDel.push(i+1);
- *     }
- *     for (let i = sDel.length-1; i >= 0; i--) sSheet.deleteRow(sDel[i]);
- *     return respond({ success: true });
- *   }
- *
- *   return respond({ error: 'Unknown action: ' + action });
- * }
- *
- * function respond(data) {
- *   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+ *   return respond({error:'Unknown action: '+action});
  * }
  */
 
@@ -236,10 +123,10 @@ const IS_CONFIGURED = CONFIG.APPS_SCRIPT_URL.startsWith('https://script.google.c
 // ─────────────────────────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────────────────────────
-let currentUser       = null;   // { userId, username, upiId }
+let currentUser       = null;
 let currentGroup      = null;
 let expenses          = [];
-let settlements       = [];     // per-pair settlements already recorded
+let settlements       = [];
 let allGroups         = [];
 let editingId         = null;
 let pendingSettlement = null;
@@ -253,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[SplitTrack] Boot start');
   applyTheme();
   bindAllEvents();
-
   if (!IS_CONFIGURED) {
     $('setup-guide').classList.remove('hidden');
     return;
@@ -265,69 +151,53 @@ document.addEventListener('DOMContentLoaded', () => {
 //  BIND ALL EVENTS — once at DOMContentLoaded
 // ─────────────────────────────────────────────────────────────
 function bindAllEvents() {
-  console.log('[SplitTrack] Binding all events');
-
+  // Setup
   $('skip-setup').addEventListener('click', () => { $('setup-guide').classList.add('hidden'); bootApp(); });
 
-  // ── Auth screens ──────────────────────────────────────────
-  $('show-register').addEventListener('click',  () => switchAuthTab('register'));
-  $('show-login').addEventListener('click',     () => switchAuthTab('login'));
-  $('btn-register').addEventListener('click',   doRegister);
-  $('btn-login').addEventListener('click',      doLogin);
+  // Auth
+  $('show-register').addEventListener('click', () => switchAuthTab('register'));
+  $('show-login').addEventListener('click',    () => switchAuthTab('login'));
+  $('btn-register').addEventListener('click',  doRegister);
+  $('btn-login').addEventListener('click',     doLogin);
   $('auth-reg-name').addEventListener('keydown',  e => { if (e.key === 'Enter') doRegister(); });
   $('auth-reg-pass').addEventListener('keydown',  e => { if (e.key === 'Enter') doRegister(); });
   $('auth-login-name').addEventListener('keydown',e => { if (e.key === 'Enter') doLogin(); });
   $('auth-login-pass').addEventListener('keydown',e => { if (e.key === 'Enter') doLogin(); });
 
-  // ── Hub settings ──────────────────────────────────────────
-  $('hub-settings-btn').addEventListener('click', e => {
-    e.stopPropagation();
-    $('hub-settings').classList.toggle('hidden');
-  });
+  // Hub settings
+  $('hub-settings-btn').addEventListener('click', e => { e.stopPropagation(); $('hub-settings').classList.toggle('hidden'); });
   $('hub-settings-close').addEventListener('click', () => $('hub-settings').classList.add('hidden'));
   $('hub-settings').addEventListener('click', e => e.stopPropagation());
   $('hub-save-upi').addEventListener('click', doSaveUpi);
-  $('hub-reset').addEventListener('click', () => {
-    if (confirm('Clear your identity and all local data?')) { localStorage.clear(); location.reload(); }
-  });
+  $('hub-reset').addEventListener('click', () => { if (confirm('Logout and clear local data?')) { localStorage.clear(); location.reload(); } });
+  document.addEventListener('click', () => $('hub-settings').classList.add('hidden'));
 
-  // ── Hub group buttons ─────────────────────────────────────
-  $('btn-create-group').addEventListener('click', () => {
-    console.log('[HUB] Create Group clicked');
-    $('new-group-name').value = '';
-    $('modal-create-group').classList.remove('hidden');
-  });
-  $('confirm-create-group').addEventListener('click', () => doCreateGroup());
+  // Hub groups
+  $('btn-create-group').addEventListener('click', () => { $('new-group-name').value = ''; $('modal-create-group').classList.remove('hidden'); });
+  $('confirm-create-group').addEventListener('click', doCreateGroup);
   $('new-group-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreateGroup(); });
   $('create-group-close').addEventListener('click',  () => $('modal-create-group').classList.add('hidden'));
   $('create-group-cancel').addEventListener('click', () => $('modal-create-group').classList.add('hidden'));
   $('modal-create-group').addEventListener('click',  e => { if (e.target === $('modal-create-group')) $('modal-create-group').classList.add('hidden'); });
 
-  $('btn-join-group').addEventListener('click', () => {
-    console.log('[HUB] Join Group clicked');
-    $('join-code-input').value = '';
-    $('modal-join-group').classList.remove('hidden');
-  });
-  $('confirm-join-group').addEventListener('click', () => doJoinGroup());
+  $('btn-join-group').addEventListener('click', () => { $('join-code-input').value = ''; $('modal-join-group').classList.remove('hidden'); });
+  $('confirm-join-group').addEventListener('click', doJoinGroup);
   $('join-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') doJoinGroup(); });
   $('join-group-close').addEventListener('click',  () => $('modal-join-group').classList.add('hidden'));
   $('join-group-cancel').addEventListener('click', () => $('modal-join-group').classList.add('hidden'));
   $('modal-join-group').addEventListener('click',  e => { if (e.target === $('modal-join-group')) $('modal-join-group').classList.add('hidden'); });
 
-  document.addEventListener('click', () => $('hub-settings').classList.add('hidden'));
-
-  // ── App buttons ───────────────────────────────────────────
+  // App header
   $('back-btn').addEventListener('click', () => showGroupsHub());
   $('dark-toggle').addEventListener('click', () => {
     document.body.classList.toggle('dark');
     localStorage.setItem('splittrack_theme', document.body.classList.contains('dark') ? 'dark' : 'light');
   });
-  $('app-settings-btn').addEventListener('click', e => {
-    e.stopPropagation();
-    $('app-settings-panel').classList.toggle('hidden');
-  });
+  $('app-settings-btn').addEventListener('click', e => { e.stopPropagation(); $('app-settings-panel').classList.toggle('hidden'); });
   $('app-settings-close').addEventListener('click', () => $('app-settings-panel').classList.add('hidden'));
   $('app-settings-panel').addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => $('app-settings-panel').classList.add('hidden'));
+
   $('copy-invite-btn').addEventListener('click', () => {
     navigator.clipboard.writeText(currentGroup.inviteCode)
       .then(() => showToast('Code copied!', 'success'))
@@ -337,8 +207,8 @@ function bindAllEvents() {
     const msg = `Join my group "${currentGroup.groupName}" on SplitTrack!\nInvite code: *${currentGroup.inviteCode}*`;
     window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
   });
-  document.addEventListener('click', () => $('app-settings-panel').classList.add('hidden'));
 
+  // Expense modal
   $('fab').addEventListener('click', openAddModal);
   $('refresh-btn').addEventListener('click', loadExpenses);
   $('modal-close').addEventListener('click', closeExpenseModal);
@@ -346,17 +216,11 @@ function bindAllEvents() {
   $('modal-overlay').addEventListener('click', e => { if (e.target === $('modal-overlay')) closeExpenseModal(); });
   $('expense-form').addEventListener('submit', handleFormSubmit);
 
-  // ── Settle modal ──────────────────────────────────────────
+  // Settle modal
   $('settle-close').addEventListener('click',  () => $('modal-settle').classList.add('hidden'));
   $('settle-cancel').addEventListener('click', () => $('modal-settle').classList.add('hidden'));
   $('modal-settle').addEventListener('click',  e => { if (e.target === $('modal-settle')) $('modal-settle').classList.add('hidden'); });
-  $('confirm-settle-pay').addEventListener('click', doSettlePay);
-
-  // UPI app direct launch buttons
-  $('btn-gpay').addEventListener('click',    () => launchUpiApp('gpay'));
-  $('btn-phonepe').addEventListener('click', () => launchUpiApp('phonepe'));
-  $('btn-paytm').addEventListener('click',   () => launchUpiApp('paytm'));
-  $('btn-upi-any').addEventListener('click', () => launchUpiApp('any'));
+  $('confirm-settle-pay').addEventListener('click', showQRPayment);
   $('confirm-settle-clear').addEventListener('click', doSettleClear);
 }
 
@@ -368,12 +232,8 @@ function bootApp() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (parsed && parsed.username) {
-        currentUser = parsed;
-        showGroupsHub();
-        return;
-      }
-    } catch (e) { /* fall through to auth */ }
+      if (parsed && parsed.username) { currentUser = parsed; showGroupsHub(); return; }
+    } catch (e) { /* fall through */ }
   }
   showScreen('screen-auth');
   switchAuthTab('login');
@@ -406,11 +266,8 @@ async function doRegister() {
     localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
     showToast('Welcome, ' + currentUser.username + '!', 'success');
     showGroupsHub();
-  } catch (e) {
-    showToast(e.message, 'error');
-  } finally {
-    hideLoader();
-  }
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideLoader(); }
 }
 
 async function doLogin() {
@@ -429,11 +286,8 @@ async function doLogin() {
     localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
     showToast('Welcome back, ' + currentUser.username + '!', 'success');
     showGroupsHub();
-  } catch (e) {
-    showToast(e.message, 'error');
-  } finally {
-    hideLoader();
-  }
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { hideLoader(); }
 }
 
 async function doSaveUpi() {
@@ -441,9 +295,8 @@ async function doSaveUpi() {
   currentUser.upiId = upiId;
   localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
   if (IS_CONFIGURED && currentUser.userId) {
-    try {
-      await sheetGet('updateUpi', { data: encodeURIComponent(JSON.stringify({ userId: currentUser.userId, upiId })) });
-    } catch (e) { /* non-critical */ }
+    try { await sheetGet('updateUpi', { data: encodeURIComponent(JSON.stringify({ userId: currentUser.userId, upiId })) }); }
+    catch (e) { /* non-critical */ }
   }
   showToast('UPI ID saved!', 'success');
   $('hub-settings').classList.add('hidden');
@@ -511,7 +364,6 @@ function renderGroupsList() {
 }
 
 async function doCreateGroup() {
-  console.log('[doCreateGroup] called');
   const name = $('new-group-name').value.trim();
   if (!name) { showToast('Enter a group name', 'error'); return; }
   const group = {
@@ -533,10 +385,8 @@ async function doCreateGroup() {
     localStorage.setItem('splittrack_groups', JSON.stringify(allGroups));
     renderGroupsList();
     showToast('Group created! Code: ' + group.inviteCode, 'success');
-  } catch (e) {
-    console.error('[doCreateGroup]', e);
-    showToast('Error: ' + e.message, 'error');
-  } finally { hideLoader(); }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  finally { hideLoader(); }
 }
 
 async function doJoinGroup() {
@@ -564,9 +414,8 @@ async function doJoinGroup() {
       renderGroupsList();
       showToast('Joined!', 'success');
     }
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally { hideLoader(); }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  finally { hideLoader(); }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -614,10 +463,10 @@ async function loadExpenses() {
       settlements = JSON.parse(localStorage.getItem('splittrack_settlements_' + currentGroup.groupId) || '[]');
     } else {
       const [expData, settleData] = await Promise.all([
-        sheetGet('read',             { groupId: encodeURIComponent(currentGroup.groupId) }),
-        sheetGet('readSettlements',  { groupId: encodeURIComponent(currentGroup.groupId) }),
+        sheetGet('read',            { groupId: encodeURIComponent(currentGroup.groupId) }),
+        sheetGet('readSettlements', { groupId: encodeURIComponent(currentGroup.groupId) }),
       ]);
-      if (!Array.isArray(expData)) throw new Error('Expected array for expenses');
+      if (!Array.isArray(expData)) throw new Error('Bad response for expenses');
       expenses    = expData.map(sanitizeRow).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       settlements = Array.isArray(settleData) ? settleData.map(sanitizeRow) : [];
     }
@@ -674,7 +523,7 @@ function renderSplitChips(members, selected) {
     const chip  = document.createElement('label');
     chip.className = 'split-chip' + (isSel ? ' checked' : '');
     chip.innerHTML = `<input type="checkbox" value="${escHtml(m)}" ${isSel ? 'checked' : ''} /><span class="split-chip-dot"></span>${escHtml(m)}`;
-    chip.querySelector('input').addEventListener('change', function() { chip.classList.toggle('checked', this.checked); });
+    chip.querySelector('input').addEventListener('change', function () { chip.classList.toggle('checked', this.checked); });
     container.appendChild(chip);
   });
 }
@@ -688,18 +537,18 @@ function getSelectedSplitMembers() {
 // ─────────────────────────────────────────────────────────────
 async function handleFormSubmit(e) {
   e.preventDefault();
-  const amount      = parseFloat($('f-amount').value);
-  const description = $('f-desc').value.trim();
-  const date        = $('f-date').value;
-  const splitWith   = getSelectedSplitMembers();
-  if (!amount || !description || !date) { showToast('Fill in all fields', 'error'); return; }
-  if (splitWith.length === 0)           { showToast('Select at least one person', 'error'); return; }
+  const amount    = parseFloat($('f-amount').value);
+  const desc      = $('f-desc').value.trim();
+  const date      = $('f-date').value;
+  const splitWith = getSelectedSplitMembers();
+  if (!amount || !desc || !date) { showToast('Fill in all fields', 'error'); return; }
+  if (!splitWith.length)         { showToast('Select at least one person', 'error'); return; }
   const now = new Date().toISOString();
   if (editingId) {
-    const original = expenses.find(ex => ex.expenseId === editingId);
-    await callSheet('edit', { expenseId: editingId, groupId: currentGroup.groupId, amount, description, date, paidBy: original ? original.paidBy : currentUser.username, splitWith: splitWith.join(','), createdAt: original ? original.createdAt : now, updatedAt: now });
+    const orig = expenses.find(ex => ex.expenseId === editingId);
+    await callSheet('edit', { expenseId: editingId, groupId: currentGroup.groupId, amount, description: desc, date, paidBy: orig ? orig.paidBy : currentUser.username, splitWith: splitWith.join(','), createdAt: orig ? orig.createdAt : now, updatedAt: now });
   } else {
-    const newExp = { expenseId: generateId(), groupId: currentGroup.groupId, amount, description, date, paidBy: currentUser.username, splitWith: splitWith.join(','), createdAt: now, updatedAt: now };
+    const newExp = { expenseId: generateId(), groupId: currentGroup.groupId, amount, description: desc, date, paidBy: currentUser.username, splitWith: splitWith.join(','), createdAt: now, updatedAt: now };
     closeExpenseModal();
     expenses.unshift(newExp);
     renderExpenses();
@@ -797,14 +646,12 @@ function renderExpenses() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  RENDER DASHBOARD — net balances AFTER subtracting settlements
+//  RENDER DASHBOARD
 // ─────────────────────────────────────────────────────────────
 function renderDashboard() {
   const members = currentGroup.members;
   const paid = {}, owed = {};
   members.forEach(m => { paid[m] = 0; owed[m] = 0; });
-
-  // Sum up raw expenses
   expenses.forEach(exp => {
     const amount   = parseFloat(exp.amount || 0);
     const payer    = (exp.paidBy || '').trim();
@@ -813,13 +660,10 @@ function renderDashboard() {
     if (payer in paid) paid[payer] += amount;
     splitArr.forEach(m => { if (m in owed) owed[m] += share; });
   });
-
   const tripTotal = Object.values(paid).reduce((s, v) => s + v, 0);
   $('trip-total').textContent  = '₹' + tripTotal.toFixed(2);
   $('equal-share').textContent = '₹' + (owed[currentUser.username] || 0).toFixed(2);
-
-  // Per-member cards
-  const grid   = $('member-cards-grid');
+  const grid = $('member-cards-grid');
   grid.innerHTML = '';
   const colors = ['#e85d3a','#3a7bd5','#27ae60','#9b59b6','#f39c12','#16a085'];
   members.forEach((m, i) => {
@@ -827,28 +671,19 @@ function renderDashboard() {
     card.className = 'card';
     card.style.setProperty('--delay', (i * 0.05) + 's');
     card.style.borderColor = colors[i % colors.length] + '33';
-    card.innerHTML = `
-      <div class="card-label" style="color:${colors[i%colors.length]}">${escHtml(m)}</div>
-      <div class="card-value">₹${paid[m].toFixed(2)}</div>
-      <div class="card-sub">paid</div>`;
+    card.innerHTML = `<div class="card-label" style="color:${colors[i%colors.length]}">${escHtml(m)}</div><div class="card-value">₹${paid[m].toFixed(2)}</div><div class="card-sub">paid</div>`;
     grid.appendChild(card);
   });
-
-  // Net balance per person (before settlements)
+  // Net balance after applying recorded settlements
   const net = {};
   members.forEach(m => net[m] = (paid[m] || 0) - (owed[m] || 0));
-
-  // Apply already-recorded settlements to net
-  // Each recorded settlement means fromUser already paid toUser that amount
-  // so fromUser's debt is reduced, toUser's credit is reduced
   settlements.forEach(s => {
-    const amount = parseFloat(s.amount || 0);
-    const from   = (s.fromUser || '').trim();
-    const to     = (s.toUser   || '').trim();
-    if (from in net) net[from] += amount;  // from paid → their debt reduces
-    if (to   in net) net[to]   -= amount;  // to received → their credit reduces
+    const amt  = parseFloat(s.amount || 0);
+    const from = (s.fromUser || '').trim();
+    const to   = (s.toUser   || '').trim();
+    if (from in net) net[from] += amt;
+    if (to   in net) net[to]   -= amt;
   });
-
   renderSettlements(calcSettlements(net));
 }
 
@@ -872,15 +707,14 @@ function calcSettlements(net) {
   return results;
 }
 
-function renderSettlements(settlements_list) {
+function renderSettlements(list) {
   const container = $('settlements-container');
   container.innerHTML = '';
-  if (settlements_list.length === 0) {
+  if (list.length === 0) {
     container.innerHTML = `<div class="settlement-row settled"><div class="settlement-info"><div class="settlement-icon">✓</div><div class="settlement-text">All settled up!</div></div></div>`;
     return;
   }
-  settlements_list.forEach(s => {
-    // Only the PAYER (from) sees the Settle button — only spender who owes can initiate
+  list.forEach(s => {
     const iAmPayer = s.from === currentUser.username;
     const row = document.createElement('div');
     row.className = 'settlement-row owes';
@@ -897,34 +731,29 @@ function renderSettlements(settlements_list) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SETTLE UP — per pair, auto-fetch UPI from sheet
+//  SETTLE MODAL
 // ─────────────────────────────────────────────────────────────
 async function openSettleModal(s) {
   pendingSettlement = s;
-
   $('settle-summary').innerHTML = `
     <div class="settle-desc">You pay <strong>${escHtml(s.to)}</strong></div>
     <div class="settle-amount">₹${s.amount.toFixed(2)}</div>`;
-
-  $('upi-label').textContent = s.to + "'s UPI ID";
-  $('settle-upi').value      = '';
-  $('settle-upi-hint').textContent = 'Looking up UPI...';
-
-  $('upi-entry-group').style.display       = 'block';
-  $('upi-app-buttons').style.display       = 'block';
+  $('upi-label').textContent                = s.to + "'s UPI ID";
+  $('settle-upi').value                     = '';
+  $('settle-upi-hint').textContent          = 'Looking up UPI...';
+  $('upi-entry-group').style.display        = 'block';
+  $('confirm-settle-pay').style.display     = '';
+  $('settle-after').style.display           = 'none';
   $('upi-pay-link-container').style.display = 'none';
   $('upi-pay-link-container').innerHTML     = '';
-  $('confirm-settle-pay').style.display    = '';
-  $('settle-after').style.display          = 'none';
   $('modal-settle').classList.remove('hidden');
-
-  // Auto-lookup the payee's UPI ID from Users sheet
+  // Auto-fetch payee UPI
   try {
     if (IS_CONFIGURED) {
       const res = await sheetGet('getUserUpi', { data: encodeURIComponent(JSON.stringify({ username: s.to })) });
       if (res.success && res.upiId) {
         $('settle-upi').value = res.upiId;
-        $('settle-upi-hint').textContent = 'UPI auto-filled from profile ✓';
+        $('settle-upi-hint').textContent = 'UPI auto-filled ✓ Verify before paying';
       } else {
         $('settle-upi-hint').textContent = s.to + ' has no UPI saved. Enter manually.';
       }
@@ -934,108 +763,117 @@ async function openSettleModal(s) {
   }
 }
 
-function doSettlePay() {
-  // Delegates to launchUpiApp with generic 'any' which shows Android app chooser
-  launchUpiApp('any');
-}
-
-// Launch specific UPI app with pre-filled payment details
-function launchUpiApp(app) {
+// ─────────────────────────────────────────────────────────────
+//  QR PAYMENT — shown when user clicks "Show QR & Pay"
+// ─────────────────────────────────────────────────────────────
+function showQRPayment() {
   if (!pendingSettlement) return;
   const upiId = $('settle-upi').value.trim();
-  if (!upiId) { showToast('Enter UPI ID first', 'error'); return; }
+  if (!upiId) { showToast('Enter UPI ID to pay', 'error'); return; }
 
   const amount = pendingSettlement.amount.toFixed(2);
-  const note   = 'SplitTrack: ' + pendingSettlement.from + ' to ' + pendingSettlement.to;
-  const pa     = encodeURIComponent(upiId);
-  const pn     = encodeURIComponent(pendingSettlement.to);
-  const tn     = encodeURIComponent(note);
-  const params = `pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`;
+  const to     = pendingSettlement.to;
+  const from   = pendingSettlement.from;
+  const note   = 'SplitTrack: ' + from + ' to ' + to;
 
-  const isAndroid = /android/i.test(navigator.userAgent);
-  console.log('[launchUpiApp] app:', app, 'isAndroid:', isAndroid);
+  // UPI payment URL encoded into QR
+  const upiUrl = 'upi://pay?pa=' + encodeURIComponent(upiId)
+    + '&pn=' + encodeURIComponent(to)
+    + '&am=' + amount
+    + '&cu=INR'
+    + '&tn=' + encodeURIComponent(note);
 
-  // Package names for Android intent URLs
-  const packages = {
-    gpay:    'com.google.android.apps.nbu.paisa.user',
-    phonepe: 'com.phonepe.app',
-    paytm:   'net.one97.paytm',
-    any:     '',
-  };
+  // QR via qrserver.com API — reliable free service
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='
+    + encodeURIComponent(upiUrl) + '&format=png&margin=10';
 
-  const container = $('upi-pay-link-container');
-  container.style.display = 'block';
-  $('upi-app-buttons').style.display    = 'none';
-  $('confirm-settle-pay').style.display = 'none';
+  // Hide entry form, show QR card
+  $('upi-entry-group').style.display        = 'none';
+  $('confirm-settle-pay').style.display     = 'none';
+  $('upi-pay-link-container').style.display = 'block';
 
-  if (isAndroid) {
-    // intent:// URL — works in ALL Android WebViews including WebIntoApp
-    // Android OS handles this directly, bypassing WebView scheme restrictions
-    const pkg = packages[app] || '';
-    const intentUrl = pkg
-      ? `intent://pay?${params}#Intent;scheme=upi;package=${pkg};end`
-      : `intent://pay?${params}#Intent;scheme=upi;end`;
+  $('upi-pay-link-container').innerHTML = `
+    <div class="qr-payment-card">
 
-    container.innerHTML = `
-      <p style="font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center">
-        Tap the button to open your payment app:
-      </p>
-      <a id="upi-pay-anchor" href="${intentUrl}"
-         style="display:block;padding:15px;background:var(--accent);color:#fff;text-align:center;
-                border-radius:10px;font-family:var(--font-display);font-weight:700;font-size:16px;
-                text-decoration:none;box-shadow:0 4px 16px rgba(232,93,58,.4)">
-        💸 Pay ₹${amount}
-      </a>
-      <p style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">
-        After paying, tap "I've Paid" below
-      </p>`;
+      <p class="qr-title">Pay ₹${escHtml(amount)} to ${escHtml(to)}</p>
+      <p class="qr-note">${escHtml(note)}</p>
 
-    document.getElementById('upi-pay-anchor').addEventListener('click', () => {
-      setTimeout(() => {
-        container.style.display            = 'none';
-        $('upi-entry-group').style.display = 'none';
-        $('settle-after').style.display    = 'block';
-      }, 2500);
-    });
+      <div class="qr-box">
+        <img src="${qrUrl}"
+             alt="UPI QR Code"
+             width="220" height="220"
+             onerror="this.src='https://quickchart.io/qr?text=${encodeURIComponent(upiUrl)}&size=220';this.onerror=function(){this.parentElement.innerHTML='<p style=color:#e85d3a;font-size:13px;padding:20px>QR unavailable.<br>Use UPI ID below.</p>';}" />
+      </div>
 
-  } else {
-    // Desktop browser — UPI apps can't open, show copy UI
-    container.innerHTML = `
-      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:18px;text-align:center">
-        <p style="font-size:14px;font-weight:700;margin-bottom:4px">Open GPay / PhonePe on your phone</p>
-        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
-          Send ₹${amount} to this UPI ID:
-        </p>
-        <div style="background:var(--bg);border:1.5px solid var(--accent);border-radius:8px;
-                    padding:12px 16px;font-size:18px;font-weight:700;letter-spacing:.04em;
-                    margin-bottom:12px;word-break:break-all;">${upiId}</div>
-        <button onclick="navigator.clipboard.writeText('${upiId}').then(()=>showToast('Copied!','success'))"
-          style="padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;
-                 cursor:pointer;font-weight:700;font-size:14px;font-family:var(--font-display)">
-          📋 Copy UPI ID
-        </button>
-        <p style="font-size:11px;color:var(--text3);margin-top:10px">
-          Note: ${note}
-        </p>
-        <button onclick="$('settle-after').style.display='block';$('upi-pay-link-container').style.display='none';$('upi-entry-group').style.display='none';"
-          style="margin-top:12px;padding:10px 20px;background:transparent;color:var(--accent);
-                 border:1.5px solid var(--accent);border-radius:8px;cursor:pointer;font-weight:600;
-                 font-size:13px;font-family:var(--font-body);width:100%">
-          I've Paid Manually →
-        </button>
-      </div>`;
-  }
+      <p class="qr-scan-hint">📱 Scan with GPay, PhonePe, Paytm or BHIM<br>Amount is pre-filled in the app</p>
+
+      <div class="qr-divider">
+        <div class="qr-divider-line"></div>
+        <span class="qr-divider-text">or pay by UPI ID</span>
+        <div class="qr-divider-line"></div>
+      </div>
+
+      <div class="qr-upi-box">${escHtml(upiId)}</div>
+
+      <button class="qr-copy-btn" id="qr-copy-upi-btn">📋 Copy UPI ID</button>
+
+      <div class="qr-details">
+        <div class="qr-detail-row">
+          <span>Amount</span>
+          <span class="qr-detail-val">₹${escHtml(amount)}</span>
+        </div>
+        <div class="qr-detail-row">
+          <span>Pay To</span>
+          <span class="qr-detail-val">${escHtml(upiId)}</span>
+        </div>
+        <div class="qr-detail-row">
+          <span>Note</span>
+          <span class="qr-detail-val">${escHtml(note)}</span>
+        </div>
+      </div>
+
+      <p class="qr-paid-hint">After paying, tap below to record it:</p>
+      <button class="qr-paid-btn" id="qr-paid-btn">✓ I Have Paid — Mark as Settled</button>
+
+    </div>`;
+
+  // Copy UPI ID button
+  document.getElementById('qr-copy-upi-btn').addEventListener('click', () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(upiId)
+        .then(() => showToast('UPI ID copied! Open GPay/PhonePe and pay', 'success'))
+        .catch(() => fallbackCopy(upiId));
+    } else {
+      fallbackCopy(upiId);
+    }
+  });
+
+  // Mark as settled button
+  document.getElementById('qr-paid-btn').addEventListener('click', () => {
+    $('settle-after').style.display           = 'block';
+    $('upi-pay-link-container').style.display = 'none';
+  });
 }
 
+function fallbackCopy(text) {
+  const el = document.createElement('textarea');
+  el.value = text;
+  el.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+  document.body.appendChild(el);
+  el.select();
+  try { document.execCommand('copy'); showToast('UPI ID copied!', 'success'); }
+  catch (e) { showToast('Copy failed. UPI: ' + text); }
+  document.body.removeChild(el);
+}
 
-// Record ONLY this pair's settlement — other pairs NOT affected
+// ─────────────────────────────────────────────────────────────
+//  RECORD SETTLEMENT
+// ─────────────────────────────────────────────────────────────
 async function doSettleClear() {
   if (!pendingSettlement) return;
   if (!confirm(`Mark ₹${pendingSettlement.amount.toFixed(2)} from ${pendingSettlement.from} to ${pendingSettlement.to} as settled?`)) return;
-
   $('modal-settle').classList.add('hidden');
   showLoader();
-
   const record = {
     settlementId: 'stl_' + Date.now(),
     groupId:      currentGroup.groupId,
@@ -1044,21 +882,18 @@ async function doSettleClear() {
     amount:       pendingSettlement.amount.toFixed(2),
     settledAt:    new Date().toISOString(),
   };
-
   try {
     if (IS_CONFIGURED) {
       const res = await sheetGet('recordSettlement', { data: encodeURIComponent(JSON.stringify(record)) });
       if (res && res.error) throw new Error(res.error);
     } else {
-      // Local mode
       const key = 'splittrack_settlements_' + currentGroup.groupId;
       const existing = JSON.parse(localStorage.getItem(key) || '[]');
       existing.push(record);
       localStorage.setItem(key, JSON.stringify(existing));
     }
-    // Reload to recalculate balances
     await loadExpenses();
-    showToast(`✓ ${pendingSettlement.from} → ${pendingSettlement.to} settled!`, 'success');
+    showToast('✓ ' + pendingSettlement.from + ' → ' + pendingSettlement.to + ' settled!', 'success');
     pendingSettlement = null;
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
@@ -1085,61 +920,26 @@ async function sheetGet(action, params = {}) {
 //  HELPERS
 // ─────────────────────────────────────────────────────────────
 function showScreen(id)   { $(id).classList.remove('hidden'); }
-function hideAllScreens() { ['screen-auth','screen-register','screen-groups','app'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); }
-
-function parseMemberStr(str) {
-  if (Array.isArray(str)) return str;
-  return String(str || '').split(',').map(s => s.trim()).filter(Boolean);
-}
-function sanitizeRow(row) {
-  const c = {};
-  for (const k in row) c[k.trim()] = typeof row[k] === 'string' ? row[k].trim() : row[k];
-  return c;
-}
-function genInviteCode(name) {
-  return name.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
-}
+function hideAllScreens() { ['screen-auth','screen-groups','app'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); }); }
+function parseMemberStr(str) { if (Array.isArray(str)) return str; return String(str || '').split(',').map(s => s.trim()).filter(Boolean); }
+function sanitizeRow(row) { const c = {}; for (const k in row) c[k.trim()] = typeof row[k] === 'string' ? row[k].trim() : row[k]; return c; }
+function genInviteCode(name) { return name.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase(); }
 function generateId() { return 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
-function today()      { return new Date().toISOString().split('T')[0]; }
-
+function today() { return new Date().toISOString().split('T')[0]; }
 function formatDate(str) {
   if (!str) return '';
   let d;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str.trim())) {
-    const [y, m, day] = str.trim().split('-').map(Number);
-    d = new Date(y, m - 1, day);
-  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str.trim())) {
-    const p = str.trim().split('/').map(Number);
-    d = p[0] > 12 ? new Date(p[2], p[1]-1, p[0]) : new Date(p[2], p[0]-1, p[1]);
-  } else { d = new Date(str); }
-  if (!d || isNaN(d.getTime())) return str;
-  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'2-digit' });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str.trim())) { const [y,m,day]=str.trim().split('-').map(Number); d=new Date(y,m-1,day); }
+  else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str.trim())) { const p=str.trim().split('/').map(Number); d=p[0]>12?new Date(p[2],p[1]-1,p[0]):new Date(p[2],p[0]-1,p[1]); }
+  else { d=new Date(str); }
+  if (!d||isNaN(d.getTime())) return str;
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
 }
-
-function applyTheme() {
-  if (localStorage.getItem('splittrack_theme') === 'dark') document.body.classList.add('dark');
-}
-function escHtml(str) {
-  const d = document.createElement('div');
-  d.appendChild(document.createTextNode(str || ''));
-  return d.innerHTML;
-}
-
-function simpleHash(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h |= 0; }
-  return String(Math.abs(h));
-}
-
+function applyTheme() { if (localStorage.getItem('splittrack_theme')==='dark') document.body.classList.add('dark'); }
+function escHtml(str) { const d=document.createElement('div'); d.appendChild(document.createTextNode(str||'')); return d.innerHTML; }
+function simpleHash(str) { let h=0; for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;} return String(Math.abs(h)); }
 let loaderTimeout;
-function showLoader() { loaderTimeout = setTimeout(() => $('loader').classList.remove('hidden'), 300); }
+function showLoader() { loaderTimeout=setTimeout(()=>$('loader').classList.remove('hidden'),300); }
 function hideLoader()  { clearTimeout(loaderTimeout); $('loader').classList.add('hidden'); }
-
 let toastTimer;
-function showToast(msg, type = '') {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className   = 'toast ' + type + ' show';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
-}
+function showToast(msg,type='') { const t=$('toast'); t.textContent=msg; t.className='toast '+type+' show'; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500); }
