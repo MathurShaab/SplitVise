@@ -952,62 +952,81 @@ function launchUpiApp(app) {
   const tn     = encodeURIComponent(note);
   const params = `pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`;
 
-  // On Android (WebIntoApp), use deep links. On browser, use web URLs.
   const isAndroid = /android/i.test(navigator.userAgent);
+  console.log('[launchUpiApp] app:', app, 'isAndroid:', isAndroid);
 
-  const androidUrls = {
-    gpay:    `tez://upi/pay?${params}`,
-    phonepe: `phonepe://pay?${params}`,
-    paytm:   `paytmmp://pay?${params}`,
-    any:     `upi://pay?${params}`,
+  // Package names for Android intent URLs
+  const packages = {
+    gpay:    'com.google.android.apps.nbu.paisa.user',
+    phonepe: 'com.phonepe.app',
+    paytm:   'net.one97.paytm',
+    any:     '',
   };
 
-  // Web URLs that work in any browser without app install
-  const webUrls = {
-    gpay:    `https://gpay.app.goo.gl/pay?pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`,
-    phonepe: `https://phon.pe/r/transfer?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    paytm:   `https://paytm.com/biz/payment/request?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    any:     `https://gpay.app.goo.gl/pay?pa=${pa}&pn=${pn}&am=${amount}&cu=INR&tn=${tn}`,
-  };
-
-  const url = isAndroid ? (androidUrls[app] || androidUrls.any) : (webUrls[app] || webUrls.any);
-  console.log('[launchUpiApp] isAndroid:', isAndroid, 'url:', url);
-
-  // Show a visible tap-to-pay link the user can click directly
-  // This avoids popup blocker issues and works in all WebViews
   const container = $('upi-pay-link-container');
-  container.innerHTML = `
-    <p style="font-size:13px;color:var(--text2);margin-bottom:8px;text-align:center">Tap the button below to open payment:</p>
-    <a href="${url}"
-       style="display:block;width:100%;padding:14px;background:var(--accent);color:#fff;text-align:center;
-              border-radius:10px;font-family:var(--font-display);font-weight:700;font-size:15px;
-              text-decoration:none;letter-spacing:.02em;"
-       onclick="handleUpiLinkClick(event, '${url}', '${app}', '${amount}', '${pa}', '${pn}', '${tn}')">
-      💸 Pay ₹${amount} Now
-    </a>`;
   container.style.display = 'block';
-
-  // Hide the app buttons, show the direct link
   $('upi-app-buttons').style.display    = 'none';
   $('confirm-settle-pay').style.display = 'none';
+
+  if (isAndroid) {
+    // intent:// URL — works in ALL Android WebViews including WebIntoApp
+    // Android OS handles this directly, bypassing WebView scheme restrictions
+    const pkg = packages[app] || '';
+    const intentUrl = pkg
+      ? `intent://pay?${params}#Intent;scheme=upi;package=${pkg};end`
+      : `intent://pay?${params}#Intent;scheme=upi;end`;
+
+    container.innerHTML = `
+      <p style="font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center">
+        Tap the button to open your payment app:
+      </p>
+      <a id="upi-pay-anchor" href="${intentUrl}"
+         style="display:block;padding:15px;background:var(--accent);color:#fff;text-align:center;
+                border-radius:10px;font-family:var(--font-display);font-weight:700;font-size:16px;
+                text-decoration:none;box-shadow:0 4px 16px rgba(232,93,58,.4)">
+        💸 Pay ₹${amount}
+      </a>
+      <p style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">
+        After paying, tap "I've Paid" below
+      </p>`;
+
+    document.getElementById('upi-pay-anchor').addEventListener('click', () => {
+      setTimeout(() => {
+        container.style.display            = 'none';
+        $('upi-entry-group').style.display = 'none';
+        $('settle-after').style.display    = 'block';
+      }, 2500);
+    });
+
+  } else {
+    // Desktop browser — UPI apps can't open, show copy UI
+    container.innerHTML = `
+      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:18px;text-align:center">
+        <p style="font-size:14px;font-weight:700;margin-bottom:4px">Open GPay / PhonePe on your phone</p>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+          Send ₹${amount} to this UPI ID:
+        </p>
+        <div style="background:var(--bg);border:1.5px solid var(--accent);border-radius:8px;
+                    padding:12px 16px;font-size:18px;font-weight:700;letter-spacing:.04em;
+                    margin-bottom:12px;word-break:break-all;">${upiId}</div>
+        <button onclick="navigator.clipboard.writeText('${upiId}').then(()=>showToast('Copied!','success'))"
+          style="padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;
+                 cursor:pointer;font-weight:700;font-size:14px;font-family:var(--font-display)">
+          📋 Copy UPI ID
+        </button>
+        <p style="font-size:11px;color:var(--text3);margin-top:10px">
+          Note: ${note}
+        </p>
+        <button onclick="$('settle-after').style.display='block';$('upi-pay-link-container').style.display='none';$('upi-entry-group').style.display='none';"
+          style="margin-top:12px;padding:10px 20px;background:transparent;color:var(--accent);
+                 border:1.5px solid var(--accent);border-radius:8px;cursor:pointer;font-weight:600;
+                 font-size:13px;font-family:var(--font-body);width:100%">
+          I've Paid Manually →
+        </button>
+      </div>`;
+  }
 }
 
-function handleUpiLinkClick(event, deepUrl, app, amount, pa, pn, tn) {
-  // Try deep link — if it fails (desktop), open web fallback
-  const webFallbacks = {
-    gpay:    `https://pay.google.com/gp/v/send?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    phonepe: `https://phon.pe/r/transfer?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    paytm:   `https://paytm.com/biz/payment/request?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-    any:     `https://pay.google.com/gp/v/send?pa=${pa}&pn=${pn}&am=${amount}&tn=${tn}`,
-  };
-
-  // Show "mark as settled" after clicking
-  setTimeout(() => {
-    $('upi-pay-link-container').style.display = 'none';
-    $('upi-entry-group').style.display        = 'none';
-    $('settle-after').style.display           = 'block';
-  }, 1000);
-}
 
 // Record ONLY this pair's settlement — other pairs NOT affected
 async function doSettleClear() {
