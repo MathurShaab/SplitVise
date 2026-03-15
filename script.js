@@ -1,5 +1,5 @@
 /**
- * SplitTrack — Production v3
+ * SplitVise — Production v3
  * ─────────────────────────────────────────────────────────────
  * APPS SCRIPT — paste into Apps Script, deploy as NEW VERSION
  * ─────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ const $ = id => document.getElementById(id);
 //  BOOT
 // ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SplitTrack] Boot start');
+  console.log('[SplitVise] Boot start');
   applyTheme();
   bindAllEvents();
   if (!IS_CONFIGURED) {
@@ -191,7 +191,7 @@ function bindAllEvents() {
   $('back-btn').addEventListener('click', () => showGroupsHub());
   $('dark-toggle').addEventListener('click', () => {
     document.body.classList.toggle('dark');
-    localStorage.setItem('splittrack_theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    localStorage.setItem('SplitVise_theme', document.body.classList.contains('dark') ? 'dark' : 'light');
   });
   $('app-settings-btn').addEventListener('click', e => { e.stopPropagation(); $('app-settings-panel').classList.toggle('hidden'); });
   $('app-settings-close').addEventListener('click', () => $('app-settings-panel').classList.add('hidden'));
@@ -204,7 +204,7 @@ function bindAllEvents() {
       .catch(() => showToast('Code: ' + currentGroup.inviteCode));
   });
   $('share-invite-btn').addEventListener('click', () => {
-    const msg = `Join my group "${currentGroup.groupName}" on SplitTrack!\nInvite code: *${currentGroup.inviteCode}*`;
+    const msg = `Join my group "${currentGroup.groupName}" on SplitVise!\nInvite code: *${currentGroup.inviteCode}*`;
     window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
   });
 
@@ -228,7 +228,7 @@ function bindAllEvents() {
 //  BOOT APP
 // ─────────────────────────────────────────────────────────────
 function bootApp() {
-  const saved = localStorage.getItem('splittrack_user');
+  const saved = localStorage.getItem('SplitVise_user');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
@@ -263,7 +263,7 @@ async function doRegister() {
     } else {
       currentUser = { userId: 'local_' + Date.now(), username, upiId };
     }
-    localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
+    localStorage.setItem('SplitVise_user', JSON.stringify(currentUser));
     showToast('Welcome, ' + currentUser.username + '!', 'success');
     showGroupsHub();
   } catch (e) { showToast(e.message, 'error'); }
@@ -283,7 +283,7 @@ async function doLogin() {
     } else {
       currentUser = { userId: 'local_' + Date.now(), username, upiId: '' };
     }
-    localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
+    localStorage.setItem('SplitVise_user', JSON.stringify(currentUser));
     showToast('Welcome back, ' + currentUser.username + '!', 'success');
     showGroupsHub();
   } catch (e) { showToast(e.message, 'error'); }
@@ -293,7 +293,7 @@ async function doLogin() {
 async function doSaveUpi() {
   const upiId = $('hub-upi').value.trim();
   currentUser.upiId = upiId;
-  localStorage.setItem('splittrack_user', JSON.stringify(currentUser));
+  localStorage.setItem('SplitVise_user', JSON.stringify(currentUser));
   if (IS_CONFIGURED && currentUser.userId) {
     try { await sheetGet('updateUpi', { data: encodeURIComponent(JSON.stringify({ userId: currentUser.userId, upiId })) }); }
     catch (e) { /* non-critical */ }
@@ -306,7 +306,7 @@ async function doSaveUpi() {
 //  GROUPS HUB
 // ─────────────────────────────────────────────────────────────
 async function showGroupsHub() {
-  console.log('[SplitTrack] showGroupsHub');
+  console.log('[SplitVise] showGroupsHub');
   hideAllScreens();
   showScreen('screen-groups');
   $('hub-username').textContent      = currentUser.username;
@@ -316,7 +316,7 @@ async function showGroupsHub() {
 }
 
 async function loadGroups() {
-  const stored = localStorage.getItem('splittrack_groups');
+  const stored = localStorage.getItem('SplitVise_groups');
   allGroups = stored ? JSON.parse(stored) : [];
   if (IS_CONFIGURED) {
     try {
@@ -330,7 +330,7 @@ async function loadGroups() {
             else allGroups[idx] = { ...g, members };
           }
         });
-        localStorage.setItem('splittrack_groups', JSON.stringify(allGroups));
+        localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
       }
     } catch (e) { console.warn('[loadGroups]', e); }
   }
@@ -382,7 +382,7 @@ async function doCreateGroup() {
       if (res && res.error) throw new Error(res.error);
     }
     allGroups.push(group);
-    localStorage.setItem('splittrack_groups', JSON.stringify(allGroups));
+    localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
     renderGroupsList();
     showToast('Group created! Code: ' + group.inviteCode, 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
@@ -403,14 +403,14 @@ async function doJoinGroup() {
       const group = { groupId: res.groupId, groupName: res.groupName, inviteCode: code, members, createdAt: '' };
       const idx = allGroups.findIndex(g => g.groupId === group.groupId);
       if (idx === -1) allGroups.push(group); else allGroups[idx] = group;
-      localStorage.setItem('splittrack_groups', JSON.stringify(allGroups));
+      localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
       renderGroupsList();
       showToast('Joined "' + res.groupName + '"!', 'success');
     } else {
       const found = allGroups.find(g => g.inviteCode === code);
       if (!found) throw new Error('Code not found locally');
       if (!found.members.includes(currentUser.username)) found.members.push(currentUser.username);
-      localStorage.setItem('splittrack_groups', JSON.stringify(allGroups));
+      localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
       renderGroupsList();
       showToast('Joined!', 'success');
     }
@@ -459,8 +459,8 @@ async function loadExpenses() {
   showLoader();
   try {
     if (!IS_CONFIGURED) {
-      expenses    = JSON.parse(localStorage.getItem('splittrack_expenses_'    + currentGroup.groupId) || '[]');
-      settlements = JSON.parse(localStorage.getItem('splittrack_settlements_' + currentGroup.groupId) || '[]');
+      expenses    = JSON.parse(localStorage.getItem('SplitVise_expenses_'    + currentGroup.groupId) || '[]');
+      settlements = JSON.parse(localStorage.getItem('SplitVise_settlements_' + currentGroup.groupId) || '[]');
     } else {
       const [expData, settleData] = await Promise.all([
         sheetGet('read',            { groupId: encodeURIComponent(currentGroup.groupId) }),
@@ -564,7 +564,7 @@ async function callSheet(action, data) {
     if (action === 'add')    expenses.unshift(data);
     else if (action === 'edit')   { const i = expenses.findIndex(e => e.expenseId === data.expenseId); if (i !== -1) expenses[i] = data; }
     else if (action === 'delete') expenses = expenses.filter(e => e.expenseId !== data.expenseId);
-    localStorage.setItem('splittrack_expenses_' + currentGroup.groupId, JSON.stringify(expenses));
+    localStorage.setItem('SplitVise_expenses_' + currentGroup.groupId, JSON.stringify(expenses));
     renderExpenses(); renderDashboard();
     showToast(action === 'delete' ? 'Deleted!' : 'Saved!', 'success');
     hideLoader(); return;
@@ -774,7 +774,7 @@ function showQRPayment() {
   const amount = pendingSettlement.amount.toFixed(2);
   const to     = pendingSettlement.to;
   const from   = pendingSettlement.from;
-  const note   = 'SplitTrack: ' + from + ' to ' + to;
+  const note   = 'SplitVise: ' + from + ' to ' + to;
 
   // UPI payment URL encoded into QR
   const upiUrl = 'upi://pay?pa=' + encodeURIComponent(upiId)
@@ -887,7 +887,7 @@ async function doSettleClear() {
       const res = await sheetGet('recordSettlement', { data: encodeURIComponent(JSON.stringify(record)) });
       if (res && res.error) throw new Error(res.error);
     } else {
-      const key = 'splittrack_settlements_' + currentGroup.groupId;
+      const key = 'SplitVise_settlements_' + currentGroup.groupId;
       const existing = JSON.parse(localStorage.getItem(key) || '[]');
       existing.push(record);
       localStorage.setItem(key, JSON.stringify(existing));
@@ -935,7 +935,7 @@ function formatDate(str) {
   if (!d||isNaN(d.getTime())) return str;
   return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
 }
-function applyTheme() { if (localStorage.getItem('splittrack_theme')==='dark') document.body.classList.add('dark'); }
+function applyTheme() { if (localStorage.getItem('SplitVise_theme')==='dark') document.body.classList.add('dark'); }
 function escHtml(str) { const d=document.createElement('div'); d.appendChild(document.createTextNode(str||'')); return d.innerHTML; }
 function simpleHash(str) { let h=0; for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;} return String(Math.abs(h)); }
 let loaderTimeout;
