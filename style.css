@@ -1248,3 +1248,263 @@ tbody td { padding: 13px 16px; vertical-align: middle; }
   #fab   { bottom: calc(22px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
 }
+/* ============================================================
+   SPLITVISE — Custom Split Amounts (replaces old addition)
+   Matches: Fraunces + Cabinet Grotesk, warm terracotta palette,
+   18px radius, pill chips, same surface/border variables.
+   Paste this at the END of your style.css (replaces the old
+   "Additional styles for custom split amounts" block entirely)
+   ============================================================ */
+
+/* ── Toggle row — full width, never clips ── */
+.split-toggle-row {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.split-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;   /* FIXES the "C'STOM" clipping bug */
+}
+
+.split-toggle-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+  pointer-events: none;
+}
+
+/* Track */
+.split-toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 100px;
+  background: var(--border2);
+  border: 1.5px solid var(--border2);
+  position: relative;
+  flex-shrink: 0;
+  transition: background .22s ease, border-color .22s ease;
+}
+
+/* Thumb */
+.split-toggle-track .split-toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.22);
+  transition: transform .22s var(--ease-spring);
+}
+
+/* Active state driven by .toggle-on class on the <label>
+   (JS: chip.classList.toggle('toggle-on', this.checked)) */
+.split-toggle-label.toggle-on .split-toggle-track {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+.split-toggle-label.toggle-on .split-toggle-track .split-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.split-toggle-text {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: .02em;
+}
+
+.split-toggle-text span {
+  font-weight: 400;
+  color: var(--text3);
+}
+
+/* ── Mode hint ── */
+.split-mode-hint {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+  margin-bottom: 10px;
+  letter-spacing: .01em;
+}
+
+/* ── EQUAL mode: chips wrap horizontally (original look) ── */
+.split-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Equal mode class: revert to horizontal wrap */
+.split-members-list.mode-equal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.split-members-list.mode-equal .split-member-row {
+  width: auto;
+  flex: none;
+}
+
+.split-members-list.mode-equal .split-member-row .split-chip {
+  flex: none;
+  width: auto;
+  min-width: unset;
+}
+
+/* ── CUSTOM mode: each row = full-width chip + amount input ── */
+.split-member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.split-member-row .split-chip {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  border-radius: 100px; /* keep pill */
+}
+
+/* ── Amount input wrapper ── */
+.split-amount-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color var(--t), box-shadow var(--t);
+  flex-shrink: 0;
+  width: 112px;
+}
+
+.split-amount-input-wrap:focus-within {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 3px rgba(43,95,170,.12);
+}
+
+.split-amount-input-wrap.hidden {
+  display: none !important;
+}
+
+.split-amt-prefix {
+  padding: 9px 4px 9px 12px;
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  user-select: none;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.split-amount-input {
+  width: 100%;
+  padding: 9px 10px 9px 2px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  -webkit-appearance: none;
+  min-width: 0;
+}
+
+.split-amount-input::placeholder {
+  color: var(--text3);
+  font-weight: 400;
+}
+
+/* ── Validation hint ── */
+.split-validation-hint {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  margin-top: 6px;
+  font-family: var(--font-body);
+  transition: all .2s ease;
+  line-height: 1.4;
+}
+
+.split-validation-hint.valid {
+  background: var(--accent3-bg);
+  color: var(--accent3);
+  border: 1px solid rgba(29,122,78,.2);
+}
+.split-validation-hint.invalid {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid rgba(200,82,42,.2);
+}
+.split-validation-hint.partial {
+  background: var(--gold-bg);
+  color: var(--gold);
+  border: 1px solid rgba(184,137,42,.2);
+}
+/* ============================================================
+   SPLITVISE — Toggle animation fix
+   Paste this at the VERY END of style.css, after everything else.
+   It overrides any earlier toggle rules cleanly.
+   ============================================================ */
+
+/* Base track */
+.split-toggle-track {
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  border-radius: 100px;
+  background: var(--border2);
+  border: 1.5px solid var(--border2);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.22s ease, border-color 0.22s ease;
+  cursor: pointer;
+}
+
+/* Base thumb — always transitions */
+.split-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+/* ON state — label gets .toggle-on from JS */
+.split-toggle-label.toggle-on .split-toggle-track {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+
+.split-toggle-label.toggle-on .split-toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* Clickable area fix — make entire label row respond */
+.split-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
