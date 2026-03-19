@@ -25,6 +25,26 @@ let pendingSettlement = null;
 
 const $ = id => document.getElementById(id);
 
+// LOCAL CACHE HELPERS
+// All sheet data is mirrored to localStorage so the app works
+// instantly on open and gracefully when offline.
+const CACHE = {
+  // Keys — group-scoped keys require currentGroup to be set
+  expKey:      () => 'SplitVise_exp_' + (currentGroup ? currentGroup.groupId : ''),
+  stlKey:      () => 'SplitVise_stl_' + (currentGroup ? currentGroup.groupId : ''),
+  groupsKey:   'SplitVise_groups',
+
+  // Groups (not group-scoped, safe to call anytime)
+  saveGroups:  (d) => { try { localStorage.setItem(CACHE.groupsKey,   JSON.stringify(d)); } catch(e){} },
+  loadGroups:  ()  => { try { return JSON.parse(localStorage.getItem(CACHE.groupsKey)   || '[]'); } catch(e){ return []; } },
+
+  // Expenses & settlements (require currentGroup set)
+  saveExpenses:    (d) => { try { localStorage.setItem(CACHE.expKey(), JSON.stringify(d)); } catch(e){} },
+  saveSettlements: (d) => { try { localStorage.setItem(CACHE.stlKey(), JSON.stringify(d)); } catch(e){} },
+  loadExpenses:    ()  => { try { return JSON.parse(localStorage.getItem(CACHE.expKey()) || '[]'); } catch(e){ return []; } },
+  loadSettlements: ()  => { try { return JSON.parse(localStorage.getItem(CACHE.stlKey()) || '[]'); } catch(e){ return []; } },
+};
+
 // ─────────────────────────────────────────────────────────────
 //  BOOT
 // ─────────────────────────────────────────────────────────────
@@ -200,25 +220,30 @@ async function showGroupsHub() {
 }
 
 async function loadGroups() {
-  const stored = localStorage.getItem('SplitVise_groups');
-  allGroups = stored ? JSON.parse(stored) : [];
-  if (IS_CONFIGURED) {
-    try {
-      const res = await sheetGet('readGroups');
-      if (Array.isArray(res)) {
-        res.forEach(g => {
-          const members = parseMemberStr(g.members);
-          if (members.includes(currentUser.username)) {
-            const idx = allGroups.findIndex(lg => lg.groupId === g.groupId);
-            if (idx === -1) allGroups.push({ ...g, members });
-            else allGroups[idx] = { ...g, members };
-          }
-        });
-        localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
-      }
-    } catch (e) { console.warn('[loadGroups]', e); }
-  }
+  // Show cached groups instantly
+  allGroups = CACHE.loadGroups();
   renderGroupsList();
+
+  if (!IS_CONFIGURED) return;
+
+  // Sync from sheet in background
+  try {
+    const res = await sheetGet('readGroups');
+    if (Array.isArray(res)) {
+      res.forEach(g => {
+        const members = parseMemberStr(g.members);
+        if (members.includes(currentUser.username)) {
+          const idx = allGroups.findIndex(lg => lg.groupId === g.groupId);
+          if (idx === -1) allGroups.push({ ...g, members });
+          else allGroups[idx] = { ...g, members };
+        }
+      });
+      CACHE.saveGroups(allGroups);
+      renderGroupsList();
+    }
+  } catch (e) {
+    console.warn('[loadGroups] offline, using cache', e);
+  }
 }
 
 function renderGroupsList() {
@@ -266,7 +291,7 @@ async function doCreateGroup() {
       if (res && res.error) throw new Error(res.error);
     }
     allGroups.push(group);
-    localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
+    CACHE.saveGroups(allGroups);
     renderGroupsList();
     showToast('Group created! Code: ' + group.inviteCode, 'success');
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
@@ -287,14 +312,14 @@ async function doJoinGroup() {
       const group = { groupId: res.groupId, groupName: res.groupName, inviteCode: code, members, createdAt: '' };
       const idx = allGroups.findIndex(g => g.groupId === group.groupId);
       if (idx === -1) allGroups.push(group); else allGroups[idx] = group;
-      localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
+      CACHE.saveGroups(allGroups);
       renderGroupsList();
       showToast('Joined "' + res.groupName + '"!', 'success');
     } else {
       const found = allGroups.find(g => g.inviteCode === code);
       if (!found) throw new Error('Code not found locally');
       if (!found.members.includes(currentUser.username)) found.members.push(currentUser.username);
-      localStorage.setItem('SplitVise_groups', JSON.stringify(allGroups));
+      CACHE.saveGroups(allGroups);
       renderGroupsList();
       showToast('Joined!', 'success');
     }
@@ -339,26 +364,51 @@ function renderMembersList() {
 // ─────────────────────────────────────────────────────────────
 //  LOAD EXPENSES + SETTLEMENTS
 // ─────────────────────────────────────────────────────────────
+
 async function loadExpenses() {
-  showLoader();
+  // Step 1: show cached data instantly (zero wait)
+  const cachedExp = CACHE.loadExpenses();
+  const cachedStl = CACHE.loadSettlements();
+  const hasCache  = cachedExp.length > 0 || cachedStl.length > 0;
+  if (hasCache) {
+    expenses    = cachedExp;
+    settlements = cachedStl;
+    renderExpenses();
+    renderDashboard();
+  }
+
+  // Step 2: sync from sheet
+  if (!IS_CONFIGURED) {
+    // Pure local mode
+    if (!hasCache) { expenses = []; settlements = []; renderExpenses(); renderDashboard(); }
+    return;
+  }
+
+  if (!hasCache) showLoader(); // only block UI on very first load
+
   try {
-    if (!IS_CONFIGURED) {
-      expenses    = JSON.parse(localStorage.getItem('SplitVise_expenses_'    + currentGroup.groupId) || '[]');
-      settlements = JSON.parse(localStorage.getItem('SplitVise_settlements_' + currentGroup.groupId) || '[]');
-    } else {
-      const [expData, settleData] = await Promise.all([
-        sheetGet('read',            { groupId: encodeURIComponent(currentGroup.groupId) }),
-        sheetGet('readSettlements', { groupId: encodeURIComponent(currentGroup.groupId) }),
-      ]);
-      if (!Array.isArray(expData)) throw new Error('Bad response for expenses');
-      expenses    = expData.map(sanitizeRow).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      settlements = Array.isArray(settleData) ? settleData.map(sanitizeRow) : [];
-    }
+    const [expData, settleData] = await Promise.all([
+      sheetGet('read',            { groupId: encodeURIComponent(currentGroup.groupId) }),
+      sheetGet('readSettlements', { groupId: encodeURIComponent(currentGroup.groupId) }),
+    ]);
+    if (!Array.isArray(expData)) throw new Error('Bad response for expenses');
+
+    expenses    = expData.map(sanitizeRow).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    settlements = Array.isArray(settleData) ? settleData.map(sanitizeRow) : [];
+
+    // Persist fresh data to cache
+    CACHE.saveExpenses(expenses);
+    CACHE.saveSettlements(settlements);
+
     renderExpenses();
     renderDashboard();
   } catch (err) {
     console.error('[loadExpenses]', err);
-    showToast('Load error: ' + err.message, 'error');
+    if (hasCache) {
+      showToast('Offline — showing cached data', '');
+    } else {
+      showToast('Load error: ' + err.message, 'error');
+    }
   } finally {
     hideLoader();
   }
@@ -724,24 +774,31 @@ async function handleFormSubmit(e) {
 
 async function callSheet(action, data) {
   closeExpenseModal();
-  showLoader();
+
+  // Optimistic local update first — UI responds instantly
+  if (action === 'add')    { expenses.unshift(data); }
+  else if (action === 'edit')   { const i = expenses.findIndex(e => e.expenseId === data.expenseId); if (i !== -1) expenses[i] = data; }
+  else if (action === 'delete') { expenses = expenses.filter(e => e.expenseId !== data.expenseId); }
+  CACHE.saveExpenses(expenses);
+  renderExpenses();
+  renderDashboard();
+
   if (!IS_CONFIGURED) {
-    if (action === 'add')    expenses.unshift(data);
-    else if (action === 'edit')   { const i = expenses.findIndex(e => e.expenseId === data.expenseId); if (i !== -1) expenses[i] = data; }
-    else if (action === 'delete') expenses = expenses.filter(e => e.expenseId !== data.expenseId);
-    localStorage.setItem('SplitVise_expenses_' + currentGroup.groupId, JSON.stringify(expenses));
-    renderExpenses(); renderDashboard();
     showToast(action === 'delete' ? 'Deleted!' : 'Saved!', 'success');
-    hideLoader(); return;
+    return;
   }
+
+  // Then sync to sheet in background
+  showLoader();
   try {
     const res = await sheetGet(action, { data: encodeURIComponent(JSON.stringify(data)) });
     if (res && res.error) throw new Error(res.error);
+    // Fetch canonical data from sheet and refresh cache
     await loadExpenses();
     showToast(action === 'delete' ? 'Deleted!' : 'Saved!', 'success');
   } catch (err) {
     console.error('[callSheet]', err);
-    showToast('Error: ' + err.message, 'error');
+    showToast('Saved locally. Sync failed: ' + err.message, 'error');
     hideLoader();
   }
 }
@@ -1070,13 +1127,12 @@ async function doSettleClear() {
       }
 
     } else {
-      // Local mode: just record the settlement payment
-      const sKey      = 'SplitVise_settlements_' + currentGroup.groupId;
-      const existing  = JSON.parse(localStorage.getItem(sKey) || '[]');
+      // Local mode: record the settlement payment in cache
+      const existing = CACHE.loadSettlements();
       existing.push(record);
-      localStorage.setItem(sKey, JSON.stringify(existing));
+      CACHE.saveSettlements(existing);
 
-      // Reload to recalculate net balances
+      // Recalculate with updated settlements
       settlements = existing;
       renderExpenses();
       renderDashboard();
@@ -1089,15 +1145,16 @@ async function doSettleClear() {
         const settledAt  = new Date().toISOString();
         expenses.forEach(exp => archived.push({ ...exp, settledAt }));
         localStorage.setItem(archiveKey, JSON.stringify(archived));
-        localStorage.removeItem('SplitVise_expenses_'    + currentGroup.groupId);
-        localStorage.removeItem('SplitVise_settlements_' + currentGroup.groupId);
+        // Clear active caches
+        CACHE.saveExpenses([]);
+        CACHE.saveSettlements([]);
         expenses    = [];
         settlements = [];
         renderExpenses();
         renderDashboard();
         showToast('🎉 All settled! Expenses archived.', 'success');
       } else {
-        showToast(`✓ Payment recorded. Remaining balances updated.`, 'success');
+        showToast('✓ Payment recorded. Remaining balances updated.', 'success');
       }
     }
 
